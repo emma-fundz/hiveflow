@@ -32,7 +32,7 @@ export const Sidebar = () => {
     <motion.aside
       initial={{ x: -300 }}
       animate={{ x: 0, width: collapsed ? 80 : 256 }}
-      className="fixed left-0 top-16 bottom-0 glass-card border-r border-glass-border z-40"
+      className="fixed left-0 top-16 bottom-0 glass-card border-r border-glass-border z-40 hidden md:block"
     >
       {/* Toggle Button */}
       <button

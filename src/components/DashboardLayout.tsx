@@ -23,7 +23,7 @@ export const DashboardLayout = () => {
       <Navbar />
       <div className="flex pt-16">
         <Sidebar />
-        <main className="flex-1 ml-64 p-8">
+        <main className="flex-1 ml-0 md:ml-64 p-4 md:p-8 max-w-full overflow-x-hidden">
           <Outlet />
         </main>
       </div>

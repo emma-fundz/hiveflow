@@ -57,6 +57,15 @@ export const Navbar = () => {
               </>
             ) : (
               <>
+                <Link to="/pricing" className="text-foreground hover:text-primary transition-colors">
+                  Pricing
+                </Link>
+                <Link to="/about" className="text-foreground hover:text-primary transition-colors">
+                  About
+                </Link>
+                <Link to="/blog" className="text-foreground hover:text-primary transition-colors">
+                  Blog
+                </Link>
                 <Link to="/login">
                   <Button variant="ghost">Login</Button>
                 </Link>
@@ -102,14 +111,28 @@ export const Navbar = () => {
               </>
             ) : (
               <div className="space-y-2">
-                <Link to="/login" className="block">
-                  <Button variant="ghost" className="w-full">Login</Button>
+                <Link to="/pricing" className="block py-2 text-foreground hover:text-primary transition-colors">
+                  Pricing
                 </Link>
-                <Link to="/register" className="block">
-                  <Button className="w-full bg-gradient-to-r from-neon-cyan to-neon-indigo">
-                    Sign Up
-                  </Button>
+                <Link to="/about" className="block py-2 text-foreground hover:text-primary transition-colors">
+                  About
                 </Link>
+                <Link to="/blog" className="block py-2 text-foreground hover:text-primary transition-colors">
+                  Blog
+                </Link>
+                <Link to="/careers" className="block py-2 text-foreground hover:text-primary transition-colors">
+                  Careers
+                </Link>
+                <div className="pt-2 space-y-2">
+                  <Link to="/login" className="block">
+                    <Button variant="ghost" className="w-full">Login</Button>
+                  </Link>
+                  <Link to="/register" className="block">
+                    <Button className="w-full bg-gradient-to-r from-neon-cyan to-neon-indigo">
+                      Sign Up
+                    </Button>
+                  </Link>
+                </div>
               </div>
             )}
           </motion.div>

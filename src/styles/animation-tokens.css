@@ -1,0 +1,66 @@
+/* Animation Tokens - Global animation configuration */
+
+:root {
+  /* Duration tokens */
+  --duration-instant: 0ms;
+  --duration-fast: 120ms;
+  --duration-normal: 250ms;
+  --duration-slow: 400ms;
+  --duration-slower: 600ms;
+
+  /* Easing tokens */
+  --ease-linear: linear;
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+  /* Default animations - smooth and performant */
+  --transition-smooth: all var(--duration-normal) var(--ease-out);
+  --transition-fast: all var(--duration-fast) var(--ease-out);
+  --transition-transform: transform var(--duration-normal) var(--ease-out);
+  --transition-opacity: opacity var(--duration-normal) var(--ease-out);
+}
+
+/* Respect user's motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    /* Reduce all durations to instant or very fast */
+    --duration-fast: 50ms;
+    --duration-normal: 100ms;
+    --duration-slow: 150ms;
+    --duration-slower: 200ms;
+
+    /* Use linear easing for reduced motion */
+    --ease-in: linear;
+    --ease-out: linear;
+    --ease-in-out: linear;
+    --ease-bounce: linear;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Utility classes */
+.transition-smooth {
+  transition: var(--transition-smooth);
+}
+
+.transition-fast {
+  transition: var(--transition-fast);
+}
+
+.transition-transform {
+  transition: var(--transition-transform);
+}
+
+.transition-opacity {
+  transition: var(--transition-opacity);
+}
