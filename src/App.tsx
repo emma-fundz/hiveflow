@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
+import { ThemeProvider } from "./context/ThemeContext";
 import { lazy, Suspense } from "react";
 import { PrefsProvider } from "./context/PrefsContext";
 import Landing from "./pages/Landing";
@@ -25,6 +26,8 @@ const Roadmap = lazy(() => import("./pages/Roadmap"));
 const About = lazy(() => import("./pages/About"));
 const Blog = lazy(() => import("./pages/Blog"));
 const Careers = lazy(() => import("./pages/Careers"));
+const Features = lazy(() => import("./pages/Features"));
+const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 
 const queryClient = new QueryClient();
 
@@ -42,39 +45,43 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <PrefsProvider>
       <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner position="top-right" />
-          <BrowserRouter>
-            <Suspense fallback={<PageLoader />}>
-              <Routes>
-                {/* Public Routes */}
-                <Route path="/" element={<Landing />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<Register />} />
-                <Route path="/pricing" element={<Pricing />} />
-                <Route path="/roadmap" element={<Roadmap />} />
-                <Route path="/about" element={<About />} />
-                <Route path="/blog" element={<Blog />} />
-                <Route path="/careers" element={<Careers />} />
-                
-                {/* Protected Dashboard Routes */}
-                <Route element={<DashboardLayout />}>
-                  <Route path="/dashboard" element={<Dashboard />} />
-                  <Route path="/members" element={<Members />} />
-                  <Route path="/events" element={<Events />} />
-                  <Route path="/announcements" element={<Announcements />} />
-                  <Route path="/files" element={<Files />} />
-                  <Route path="/stats" element={<Analytics />} />
-                  <Route path="/settings" element={<Settings />} />
-                </Route>
+        <ThemeProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner position="top-right" />
+            <BrowserRouter>
+              <Suspense fallback={<PageLoader />}>
+                <Routes>
+                  {/* Public Routes */}
+                  <Route path="/" element={<Landing />} />
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/register" element={<Register />} />
+                  <Route path="/pricing" element={<Pricing />} />
+                  <Route path="/roadmap" element={<Roadmap />} />
+                  <Route path="/about" element={<About />} />
+                  <Route path="/blog" element={<Blog />} />
+                  <Route path="/careers" element={<Careers />} />
+                  <Route path="/features" element={<Features />} />
+                  
+                  {/* Protected Dashboard Routes */}
+                  <Route element={<DashboardLayout />}>
+                    <Route path="/dashboard" element={<Dashboard />} />
+                    <Route path="/members" element={<Members />} />
+                    <Route path="/events" element={<Events />} />
+                    <Route path="/announcements" element={<Announcements />} />
+                    <Route path="/files" element={<Files />} />
+                    <Route path="/stats" element={<Analytics />} />
+                    <Route path="/settings" element={<Settings />} />
+                    <Route path="/admin" element={<AdminDashboard />} />
+                  </Route>
 
-                {/* Catch-all 404 Route */}
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </Suspense>
-          </BrowserRouter>
-        </TooltipProvider>
+                  {/* Catch-all 404 Route */}
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </Suspense>
+            </BrowserRouter>
+          </TooltipProvider>
+        </ThemeProvider>
       </AuthProvider>
     </PrefsProvider>
   </QueryClientProvider>

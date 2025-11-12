@@ -8,15 +8,16 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/context/ThemeContext';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 const Settings = () => {
   const { user, logout } = useAuth();
+  const { colorBlindMode, setColorBlindMode, isDarkMode, toggleDarkMode } = useTheme();
   const navigate = useNavigate();
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [pushNotifications, setPushNotifications] = useState(true);
-  const [darkMode, setDarkMode] = useState(true);
 
   const handleLogout = () => {
     logout();
@@ -153,7 +154,26 @@ const Settings = () => {
                   Use dark theme for better viewing at night
                 </p>
               </div>
-              <Switch checked={darkMode} onCheckedChange={setDarkMode} />
+              <Switch checked={isDarkMode} onCheckedChange={toggleDarkMode} />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold mb-1">Color-Blind Friendly Mode</h3>
+                <p className="text-sm text-muted-foreground">
+                  Accessible color palette for better visibility
+                </p>
+              </div>
+              <select 
+                className="p-2 rounded-lg bg-background border border-border text-sm"
+                value={colorBlindMode}
+                onChange={(e) => setColorBlindMode(e.target.value as any)}
+              >
+                <option value="normal">Normal</option>
+                <option value="deuteranopia">Deuteranopia</option>
+                <option value="protanopia">Protanopia</option>
+                <option value="tritanopia">Tritanopia</option>
+              </select>
             </div>
 
             <div>

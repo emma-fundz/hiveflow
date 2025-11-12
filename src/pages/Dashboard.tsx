@@ -106,15 +106,24 @@ const Dashboard = () => {
         transition={{ delay: 0.6 }}
         className="grid grid-cols-1 md:grid-cols-3 gap-6"
       >
-        <Card className="glass-card p-6 hover:neon-glow-cyan transition-shadow cursor-pointer">
+        <Card 
+          className="glass-card p-6 hover:neon-glow-cyan transition-all cursor-pointer hover:scale-105"
+          onClick={() => window.location.href = '/events'}
+        >
           <h3 className="text-xl font-semibold mb-2">Create Event</h3>
           <p className="text-muted-foreground text-sm">Plan your next community gathering</p>
         </Card>
-        <Card className="glass-card p-6 hover:neon-glow-cyan transition-shadow cursor-pointer">
+        <Card 
+          className="glass-card p-6 hover:neon-glow-cyan transition-all cursor-pointer hover:scale-105"
+          onClick={() => window.location.href = '/announcements'}
+        >
           <h3 className="text-xl font-semibold mb-2">Send Announcement</h3>
           <p className="text-muted-foreground text-sm">Keep everyone in the loop</p>
         </Card>
-        <Card className="glass-card p-6 hover:neon-glow-cyan transition-shadow cursor-pointer">
+        <Card 
+          className="glass-card p-6 hover:neon-glow-cyan transition-all cursor-pointer hover:scale-105"
+          onClick={() => window.location.href = '/stats'}
+        >
           <h3 className="text-xl font-semibold mb-2">View Reports</h3>
           <p className="text-muted-foreground text-sm">Analyze community metrics</p>
         </Card>

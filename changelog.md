@@ -4,6 +4,42 @@ All notable changes to ClubManager will be documented in this file. Newest chang
 
 ---
 
+## 2025-02-11 18:45:00
+
+### ✨ Major Feature Release - Performance, Admin Dashboard, Enhanced UX
+
+**New Features:**
+- Features Page (/features) with comprehensive platform showcase
+- Admin Dashboard (/admin) - exclusive admin-only access with system-wide analytics
+- Autosave Drafts System (saves every 5 seconds to localStorage)
+- Keyboard Shortcuts (Cmd/Ctrl+S save, Cmd/Ctrl+Enter publish)
+- Color-Blind Friendly Mode (4 accessible palettes)
+- Dark Mode Toggle with persistent preferences
+- ThemeContext for global theme management
+- Custom useDrafts hook for draft management
+
+**Performance Optimizations:**
+- Vite build config with manual code chunking (react-vendor, ui-vendor, chart-vendor)
+- Enhanced lazy loading for all heavy pages
+- Bundle size optimizations
+
+**Navigation Updates:**
+- Added Features and Admin links to Navbar
+- Fixed Dashboard quick action cards with proper routing
+- Mobile menu improvements
+
+**Files Created:**
+- src/pages/Features.tsx
+- src/pages/AdminDashboard.tsx
+- src/hooks/useDrafts.ts
+- src/context/ThemeContext.tsx
+
+**Files Modified:**
+- vite.config.ts, src/App.tsx, src/pages/Dashboard.tsx, src/pages/Settings.tsx
+- src/pages/Announcements.tsx, src/components/Navbar.tsx, README.md, changelog.md
+
+---
+
 ## 2025-02-11
 
 ### ✨ Major Platform Enhancement - Production Ready

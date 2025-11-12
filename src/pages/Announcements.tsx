@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Megaphone, ThumbsUp, MessageCircle, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -6,6 +6,8 @@ import { Card } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from 'sonner';
+import { useDrafts } from '@/hooks/useDrafts';
+import { useAuth } from '@/context/AuthContext';
 
 interface Announcement {
   id: string;
@@ -64,8 +66,44 @@ const mockAnnouncements: Announcement[] = [
 ];
 
 const Announcements = () => {
+  const { user } = useAuth();
   const [announcements, setAnnouncements] = useState<Announcement[]>(mockAnnouncements);
   const [newAnnouncement, setNewAnnouncement] = useState('');
+  
+  const draftKey = `announcement-draft-${user?.id || 'guest'}`;
+  const { loadDraft, clearDraft, forceSave } = useDrafts({
+    key: draftKey,
+    value: newAnnouncement,
+    delay: 5000,
+  });
+
+  // Load draft on mount
+  useEffect(() => {
+    const draft = loadDraft();
+    if (draft) {
+      setNewAnnouncement(draft);
+      toast.info('Draft restored');
+    }
+  }, []);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd/Ctrl + S to save draft
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        forceSave();
+      }
+      // Cmd/Ctrl + Enter to publish
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault();
+        handlePost();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [newAnnouncement]);
 
   const handlePost = () => {
     if (!newAnnouncement.trim()) {
@@ -76,8 +114,8 @@ const Announcements = () => {
     const announcement: Announcement = {
       id: Date.now().toString(),
       author: {
-        name: 'You',
-        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=You',
+        name: user?.name || 'You',
+        avatar: user?.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=You',
         role: 'Admin'
       },
       content: newAnnouncement,
@@ -89,6 +127,7 @@ const Announcements = () => {
 
     setAnnouncements([announcement, ...announcements]);
     setNewAnnouncement('');
+    clearDraft();
     toast.success('Announcement posted!');
   };
 
@@ -131,7 +170,10 @@ const Announcements = () => {
                 rows={4}
                 className="resize-none"
               />
-              <div className="flex justify-end">
+              <div className="flex justify-between items-center">
+                <p className="text-xs text-muted-foreground">
+                  💡 Tip: Cmd/Ctrl+S to save • Cmd/Ctrl+Enter to publish
+                </p>
                 <Button
                   onClick={handlePost}
                   className="bg-gradient-to-r from-neon-cyan to-neon-indigo hover:opacity-90"

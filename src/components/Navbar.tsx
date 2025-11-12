@@ -41,6 +41,11 @@ export const Navbar = () => {
                 <Link to="/events" className="text-foreground hover:text-primary transition-colors">
                   Events
                 </Link>
+                {user?.email === 'admin@clubmanager.com' && (
+                  <Link to="/admin" className="text-foreground hover:text-primary transition-colors">
+                    Admin
+                  </Link>
+                )}
                 <button className="relative p-2 hover:bg-muted rounded-lg transition-colors">
                   <Bell className="w-5 h-5" />
                   <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full"></span>
@@ -57,6 +62,9 @@ export const Navbar = () => {
               </>
             ) : (
               <>
+                <Link to="/features" className="text-foreground hover:text-primary transition-colors">
+                  Features
+                </Link>
                 <Link to="/pricing" className="text-foreground hover:text-primary transition-colors">
                   Pricing
                 </Link>
@@ -105,12 +113,20 @@ export const Navbar = () => {
                 <Link to="/events" className="block py-2 text-foreground hover:text-primary transition-colors">
                   Events
                 </Link>
+                {user?.email === 'admin@clubmanager.com' && (
+                  <Link to="/admin" className="block py-2 text-foreground hover:text-primary transition-colors">
+                    Admin
+                  </Link>
+                )}
                 <Link to="/settings" className="block py-2 text-foreground hover:text-primary transition-colors">
                   Settings
                 </Link>
               </>
             ) : (
               <div className="space-y-2">
+                <Link to="/features" className="block py-2 text-foreground hover:text-primary transition-colors">
+                  Features
+                </Link>
                 <Link to="/pricing" className="block py-2 text-foreground hover:text-primary transition-colors">
                   Pricing
                 </Link>

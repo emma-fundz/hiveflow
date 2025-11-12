@@ -16,7 +16,7 @@ ClubManager empowers community leaders, club organizers, and group administrator
 - **Event Coordinators**: Plan events, handle RSVPs, track attendance
 - **Club Presidents**: Keep members informed with announcements and updates  
 - **Team Leaders**: Share files, collaborate, monitor growth metrics
-- **Organization Administrators**: Analyze trends and make data-driven decisions
+- **Organization Administrators**: Analyze trends, make data-driven decisions, and access admin dashboard
 
 ---
 
@@ -89,6 +89,12 @@ Stay updated with insights, tips, and stories about community management. Search
 ### 💼 **Careers**
 Join the ClubManager team! Browse open positions with expandable job listings showing responsibilities and requirements.
 
+### ⭐ **Features**
+Comprehensive feature showcase highlighting Member Management, Events & RSVP, Announcements Feed, File Sharing, Analytics & Reports, and Multi-device Experience with beautiful interactive cards.
+
+### 🔐 **Admin Dashboard**
+Exclusive admin-only dashboard (`/admin`) accessible only to the platform administrator. Features system-wide analytics, user growth charts, activity distribution, and real-time system monitoring. Includes total users, active/inactive breakdown, events, files, and announcements metrics.
+
 ---
 
 ## Navigating ClubManager
@@ -120,6 +126,7 @@ Use the **collapsible sidebar** on desktop (or hamburger menu on mobile) to acce
 
 Accessible to all visitors:
 
+- **Features**: Explore all platform capabilities
 - **Pricing**: Compare plans and pricing tiers
 - **Roadmap**: See what's coming next
 - **About**: Learn about our mission and team
@@ -156,19 +163,22 @@ ClubManager is built with accessibility in mind:
 
 - **Semantic HTML** for screen reader compatibility
 - **ARIA labels** on interactive elements
-- **Keyboard navigation** support throughout
+- **Keyboard navigation** support throughout (Cmd/Ctrl+S to save drafts, Cmd/Ctrl+Enter to publish)
 - **Focus indicators** for better visibility
 - **Color contrast** meeting WCAG standards
 - **Reduced motion** support for users who prefer minimal animations
+- **Color-blind friendly mode** with accessible color palettes (Deuteranopia, Protanopia, Tritanopia options)
 
 ---
 
 ## Performance Optimizations
 
-- **Lazy loading** for heavy pages (Analytics, Files, etc.)
-- **Code splitting** with React.lazy and Suspense
+- **Lazy loading** for heavy pages (Dashboard, Analytics, Files, Admin, etc.)
+- **Code splitting** with React.lazy and Suspense for optimal bundle sizes
+- **Manual code chunking** separating React, UI, and Chart libraries
 - **Optimized animations** using transform and opacity only
 - **Responsive images** with proper sizing
+- **Autosave drafts** to localStorage (announcements saved every 5 seconds)
 - **Efficient rendering** with React best practices
 
 ---
@@ -177,11 +187,14 @@ ClubManager is built with accessibility in mind:
 
 1. **Keep Your Profile Updated**: Add a profile picture and bio
 2. **Enable Notifications**: Stay informed about community activity  
-3. **Post Regular Announcements**: Keep your community engaged
+3. **Post Regular Announcements**: Keep your community engaged (use Cmd/Ctrl+S to save drafts!)
 4. **Plan Events Early**: Give members plenty of notice
 5. **Review Analytics**: Use insights to grow and improve
 6. **Use Search**: Quickly find what you need
 7. **Explore Mobile**: Fully responsive on all devices
+8. **Try Color-Blind Mode**: If needed, enable accessible colors in Settings
+9. **Use Keyboard Shortcuts**: Save time with Cmd/Ctrl+Enter to publish
+10. **Admin Dashboard**: Administrators can access `/admin` for system-wide insights
 
 ---
 
