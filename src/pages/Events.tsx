@@ -9,6 +9,22 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { useAuth } from '@/context/AuthContext';
+import db from '@/lib/cocobase';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+
+interface EventData {
+  title: string;
+  description: string;
+  date: string;
+  time: string;
+  location: string;
+  attendees: number;
+  maxAttendees: number;
+  image: string;
+  rsvp: boolean;
+  ownerId: string;
+}
 
 interface Event {
   id: string;
@@ -23,61 +39,131 @@ interface Event {
   rsvp: boolean;
 }
 
-const mockEvents: Event[] = [
-  {
-    id: '1',
-    title: 'Summer Networking Meetup',
-    description: 'Join us for an evening of networking and fun activities.',
-    date: '2025-02-15',
-    time: '18:00',
-    location: 'Central Park, NYC',
-    attendees: 45,
-    maxAttendees: 100,
-    image: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=400',
-    rsvp: false
-  },
-  {
-    id: '2',
-    title: 'Tech Workshop: AI Fundamentals',
-    description: 'Learn the basics of artificial intelligence and machine learning.',
-    date: '2025-02-20',
-    time: '14:00',
-    location: 'Innovation Hub, Building A',
-    attendees: 67,
-    maxAttendees: 80,
-    image: 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=400',
-    rsvp: true
-  },
-  {
-    id: '3',
-    title: 'Community Picnic',
-    description: 'Family-friendly outdoor gathering with games and food.',
-    date: '2025-03-05',
-    time: '12:00',
-    location: 'Riverside Park',
-    attendees: 23,
-    maxAttendees: 150,
-    image: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400',
-    rsvp: false
-  },
-];
-
 const Events = () => {
-  const [events, setEvents] = useState<Event[]>(mockEvents);
+  const { user } = useAuth();
+  const workspaceId = (user as any)?.workspaceId ?? (user as any)?.id;
+  const queryClient = useQueryClient();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [filter, setFilter] = useState<'all' | 'upcoming' | 'past'>('upcoming');
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [date, setDate] = useState('');
+  const [time, setTime] = useState('');
+  const [location, setLocation] = useState('');
+  const [maxAttendees, setMaxAttendees] = useState('');
 
-  const handleCreateEvent = (e: React.FormEvent) => {
+  const {
+    data: eventDocs = [],
+    isLoading,
+    isError,
+  } = useQuery({
+    queryKey: ['events', workspaceId],
+    queryFn: async () => {
+      if (!workspaceId) return [];
+      const docs = await db.listDocuments<EventData>('events', {
+        filters: { ownerId: workspaceId },
+        sort: 'date',
+        order: 'asc',
+      });
+      return docs;
+    },
+    enabled: !!workspaceId,
+  });
+
+  const allEvents: Event[] = eventDocs.map((doc: any) => ({
+    id: doc.id,
+    title: doc.data?.title,
+    description: doc.data?.description,
+    date: doc.data?.date,
+    time: doc.data?.time,
+    location: doc.data?.location,
+    attendees: doc.data?.attendees ?? 0,
+    maxAttendees: doc.data?.maxAttendees ?? 0,
+    image:
+      doc.data?.image ||
+      'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=400',
+    rsvp: !!doc.data?.rsvp,
+  }));
+
+  const now = new Date();
+  const events = allEvents.filter((event) => {
+    const eventDate = new Date(`${event.date}T${event.time || '00:00'}`);
+    if (filter === 'upcoming') return eventDate >= now;
+    if (filter === 'past') return eventDate < now;
+    return true;
+  });
+
+  const createEventMutation = useMutation({
+    mutationFn: async () => {
+      if (!workspaceId) throw new Error('Not authenticated');
+      const data: EventData = {
+        title,
+        description,
+        date,
+        time,
+        location,
+        maxAttendees: Number(maxAttendees || 0),
+        attendees: 0,
+        rsvp: false,
+        image:
+          'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=400',
+        ownerId: workspaceId,
+      };
+      return db.createDocument<EventData>('events', data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['events', workspaceId] });
+      toast.success('Event created successfully!');
+      setIsCreateModalOpen(false);
+      setTitle('');
+      setDescription('');
+      setDate('');
+      setTime('');
+      setLocation('');
+      setMaxAttendees('');
+    },
+    onError: (err: any) => {
+      console.log('COCOBASE EVENTS CREATE ERROR:', err);
+      toast.error('Failed to create event');
+    },
+  });
+
+  const rsvpMutation = useMutation({
+    mutationFn: async (payload: {
+      id: string;
+      currentRsvp: boolean;
+      attendees: number;
+    }) => {
+      const newRsvp = !payload.currentRsvp;
+      const newAttendees = newRsvp
+        ? payload.attendees + 1
+        : Math.max(0, payload.attendees - 1);
+      await db.updateDocument<EventData>('events', payload.id, {
+        rsvp: newRsvp,
+        attendees: newAttendees,
+      });
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['events', user?.id] });
+      toast.success(variables.currentRsvp ? 'RSVP cancelled' : 'RSVP confirmed!');
+    },
+    onError: (err: any) => {
+      console.log('COCOBASE EVENTS RSVP ERROR:', err);
+      toast.error('Failed to update RSVP');
+    },
+  });
+
+  const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success('Event created successfully!');
-    setIsCreateModalOpen(false);
+    await createEventMutation.mutateAsync();
   };
 
-  const handleRSVP = (eventId: string) => {
-    setEvents(events.map(event =>
-      event.id === eventId ? { ...event, rsvp: !event.rsvp, attendees: event.rsvp ? event.attendees - 1 : event.attendees + 1 } : event
-    ));
-    toast.success(events.find(e => e.id === eventId)?.rsvp ? 'RSVP cancelled' : 'RSVP confirmed!');
+  const handleRSVP = (event: Event) => {
+    rsvpMutation.mutate({
+      id: event.id,
+      currentRsvp: event.rsvp,
+      attendees: event.attendees,
+    });
   };
 
   const getTimeUntil = (date: string, time: string) => {
@@ -115,29 +201,61 @@ const Events = () => {
             <form onSubmit={handleCreateEvent} className="space-y-4">
               <div className="space-y-2">
                 <Label>Event Title</Label>
-                <Input placeholder="Summer Meetup" required />
+                <Input
+                  placeholder="Summer Meetup"
+                  required
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                />
               </div>
               <div className="space-y-2">
                 <Label>Description</Label>
-                <Textarea placeholder="Tell us about the event..." rows={3} required />
+                <Textarea
+                  placeholder="Tell us about the event..."
+                  rows={3}
+                  required
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Date</Label>
-                  <Input type="date" required />
+                  <Input
+                    type="date"
+                    required
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Time</Label>
-                  <Input type="time" required />
+                  <Input
+                    type="time"
+                    required
+                    value={time}
+                    onChange={(e) => setTime(e.target.value)}
+                  />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label>Location</Label>
-                <Input placeholder="Central Park, NYC" required />
+                <Input
+                  placeholder="Central Park, NYC"
+                  required
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                />
               </div>
               <div className="space-y-2">
                 <Label>Max Attendees</Label>
-                <Input type="number" placeholder="100" required />
+                <Input
+                  type="number"
+                  placeholder="100"
+                  required
+                  value={maxAttendees}
+                  onChange={(e) => setMaxAttendees(e.target.value)}
+                />
               </div>
               <Button type="submit" className="w-full bg-gradient-to-r from-neon-cyan to-neon-indigo">
                 Create Event
@@ -162,6 +280,12 @@ const Events = () => {
       </div>
 
       {/* Events Grid */}
+      {isLoading && (
+        <p className="text-muted-foreground text-sm">Loading events...</p>
+      )}
+      {isError && (
+        <p className="text-destructive text-sm">Failed to load events.</p>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {events.map((event, index) => (
           <motion.div
@@ -208,7 +332,7 @@ const Events = () => {
                 </div>
 
                 <Button
-                  onClick={() => handleRSVP(event.id)}
+                  onClick={() => handleRSVP(event)}
                   className={`w-full ${event.rsvp ? 'bg-muted hover:bg-muted/80' : 'bg-gradient-to-r from-neon-cyan to-neon-indigo hover:opacity-90'}`}
                 >
                   {event.rsvp ? 'Cancel RSVP' : 'RSVP Now'}

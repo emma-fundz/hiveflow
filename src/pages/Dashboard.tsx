@@ -2,23 +2,211 @@ import { motion } from 'framer-motion';
 import { Users, Calendar, TrendingUp, Activity } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { useAuth } from '@/context/AuthContext';
+import db from '@/lib/cocobase';
+import { useQuery } from '@tanstack/react-query';
 
 const Dashboard = () => {
   const { user } = useAuth();
+  const workspaceId = (user as any)?.workspaceId ?? (user as any)?.id;
+  const { data: memberDocs = [] } = useQuery({
+    queryKey: ['dashboard-members', workspaceId],
+    queryFn: async () => {
+      if (!workspaceId) return [];
+      const docs = await db.listDocuments('members', {
+        filters: { ownerId: workspaceId },
+      });
+      return docs;
+    },
+    enabled: !!workspaceId,
+  });
+
+  const { data: eventDocs = [] } = useQuery({
+    queryKey: ['dashboard-events', workspaceId],
+    queryFn: async () => {
+      if (!workspaceId) return [];
+      const docs = await db.listDocuments('events', {
+        filters: { ownerId: workspaceId },
+      });
+      return docs;
+    },
+    enabled: !!workspaceId,
+  });
+
+  const { data: announcementDocs = [] } = useQuery({
+    queryKey: ['dashboard-announcements', workspaceId],
+    queryFn: async () => {
+      if (!workspaceId) return [];
+      const docs = await db.listDocuments('announcements', {
+        filters: { ownerId: workspaceId },
+      });
+      return docs;
+    },
+    enabled: !!workspaceId,
+  });
+
+  const memberDocsAny = memberDocs as any[];
+  const eventDocsAny = eventDocs as any[];
+  const announcementDocsAny = announcementDocs as any[];
+
+  const memberCount = memberDocsAny.length;
+
+  const upcomingEventsCount = eventDocsAny.filter((doc) => {
+    const date = doc.data?.date;
+    if (!date) return false;
+    const time = doc.data?.time || '00:00';
+    const eventDate = new Date(`${date}T${time}`);
+    return eventDate >= new Date();
+  }).length;
+
+  const announcementCount = announcementDocsAny.length;
+
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const isToday = (iso?: string) => {
+    if (!iso) return false;
+    const d = new Date(iso);
+    return d >= todayStart;
+  };
+
+  const membersToday = memberDocsAny.filter((doc) =>
+    isToday(doc.data?.joinedAt ?? doc.created_at),
+  ).length;
+
+  const eventsToday = eventDocsAny.filter((doc) =>
+    isToday(doc.created_at),
+  ).length;
+
+  const announcementsToday = announcementDocsAny.filter((doc) =>
+    isToday(doc.data?.createdAt ?? doc.created_at),
+  ).length;
+
+  const activityToday = membersToday + eventsToday + announcementsToday;
+
+  const numberFormatter = new Intl.NumberFormat();
 
   const stats = [
-    { label: 'Total Members', value: '2,450', change: '+12%', icon: Users, color: 'from-neon-cyan to-blue-500' },
-    { label: 'Upcoming Events', value: '127', change: '+8%', icon: Calendar, color: 'from-neon-indigo to-purple-500' },
-    { label: 'Active Today', value: '892', change: '+23%', icon: Activity, color: 'from-pink-500 to-rose-500' },
-    { label: 'Growth Rate', value: '34%', change: '+5%', icon: TrendingUp, color: 'from-green-500 to-emerald-500' },
+    {
+      label: 'Total Members',
+      value: numberFormatter.format(memberCount),
+      change: '--',
+      icon: Users,
+      color: 'from-neon-cyan to-blue-500',
+    },
+    {
+      label: 'Upcoming Events',
+      value: numberFormatter.format(upcomingEventsCount),
+      change: '--',
+      icon: Calendar,
+      color: 'from-neon-indigo to-purple-500',
+    },
+    {
+      label: 'Active Today',
+      value: numberFormatter.format(activityToday),
+      change: '--',
+      icon: Activity,
+      color: 'from-pink-500 to-rose-500',
+    },
+    {
+      label: 'Total Announcements',
+      value: numberFormatter.format(announcementCount),
+      change: '--',
+      icon: TrendingUp,
+      color: 'from-green-500 to-emerald-500',
+    },
   ];
 
-  const recentActivities = [
-    { user: 'Sarah Chen', action: 'joined the community', time: '2 minutes ago', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah' },
-    { user: 'Mike Johnson', action: 'created "Summer Meetup" event', time: '5 minutes ago', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Mike' },
-    { user: 'Emma Wilson', action: 'posted a new announcement', time: '8 minutes ago', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Emma' },
-    { user: 'James Brown', action: 'uploaded 3 files', time: '12 minutes ago', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=James' },
-  ];
+  const formatRelativeTime = (iso?: string) => {
+    if (!iso) return '';
+    const date = new Date(iso);
+    const diffMs = Date.now() - date.getTime();
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+    if (diffMinutes < 1) return 'Just now';
+    if (diffMinutes < 60) {
+      return `${diffMinutes} minute${diffMinutes === 1 ? '' : 's'} ago`;
+    }
+    const diffHours = Math.floor(diffMinutes / 60);
+    if (diffHours < 24) {
+      return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+    }
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+  };
+
+  const activities: {
+    id: string;
+    title: string;
+    description: string;
+    timeLabel: string;
+    avatar: string;
+    timestamp: number;
+  }[] = [];
+
+  if (memberDocsAny.length) {
+    const sorted = [...memberDocsAny].sort((a, b) => {
+      const aTs = a.data?.joinedAt ?? a.created_at;
+      const bTs = b.data?.joinedAt ?? b.created_at;
+      return new Date(bTs).getTime() - new Date(aTs).getTime();
+    });
+    const latest = sorted[0];
+    const name = latest.data?.name || latest.data?.email || 'New member';
+    const ts = latest.data?.joinedAt ?? latest.created_at;
+    const avatar =
+      latest.data?.avatar ||
+      `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(
+        name,
+      )}`;
+    activities.push({
+      id: latest.id,
+      title: name,
+      description: 'joined the community',
+      timeLabel: formatRelativeTime(ts),
+      avatar,
+      timestamp: ts ? new Date(ts).getTime() : 0,
+    });
+  }
+
+  if (eventDocsAny.length) {
+    const sorted = [...eventDocsAny].sort((a, b) => {
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+    const latest = sorted[0];
+    const title = latest.data?.title || 'New event';
+    const ts = latest.created_at;
+    activities.push({
+      id: latest.id,
+      title,
+      description: 'event created',
+      timeLabel: formatRelativeTime(ts),
+      avatar:
+        latest.data?.image ||
+        'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=200',
+      timestamp: ts ? new Date(ts).getTime() : 0,
+    });
+  }
+
+  if (announcementDocsAny.length) {
+    const sorted = [...announcementDocsAny].sort((a, b) => {
+      const aTs = a.data?.createdAt ?? a.created_at;
+      const bTs = b.data?.createdAt ?? b.created_at;
+      return new Date(bTs).getTime() - new Date(aTs).getTime();
+    });
+    const latest = sorted[0];
+    const authorName = latest.data?.authorName || 'You';
+    const ts = latest.data?.createdAt ?? latest.created_at;
+    activities.push({
+      id: latest.id,
+      title: authorName,
+      description: 'posted a new announcement',
+      timeLabel: formatRelativeTime(ts),
+      avatar:
+        latest.data?.authorAvatar ||
+        'https://api.dicebear.com/7.x/avataaars/svg?seed=You',
+      timestamp: ts ? new Date(ts).getTime() : 0,
+    });
+  }
+
+  const recentActivities = activities.sort((a, b) => b.timestamp - a.timestamp);
 
   return (
     <div className="space-y-8">
@@ -73,9 +261,14 @@ const Dashboard = () => {
           </div>
 
           <div className="space-y-4">
+            {recentActivities.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                No recent activity yet. Once you add members, events, or announcements, they will appear here.
+              </p>
+            )}
             {recentActivities.map((activity, index) => (
               <motion.div
-                key={index}
+                key={activity.id}
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.5 + index * 0.1 }}
@@ -83,15 +276,15 @@ const Dashboard = () => {
               >
                 <img
                   src={activity.avatar}
-                  alt={activity.user}
+                  alt={activity.title}
                   className="w-12 h-12 rounded-full ring-2 ring-primary/20"
                 />
                 <div className="flex-1">
                   <p className="text-sm">
-                    <span className="font-medium">{activity.user}</span>{' '}
-                    <span className="text-muted-foreground">{activity.action}</span>
+                    <span className="font-medium">{activity.title}</span>{' '}
+                    <span className="text-muted-foreground">{activity.description}</span>
                   </p>
-                  <p className="text-xs text-muted-foreground">{activity.time}</p>
+                  <p className="text-xs text-muted-foreground">{activity.timeLabel}</p>
                 </div>
               </motion.div>
             ))}

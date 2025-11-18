@@ -4,6 +4,48 @@ All notable changes to ClubManager will be documented in this file. Newest chang
 
 ---
 
+## 2025-11-18
+
+### 🔐 Cocobase Authentication & Data Backend Integration
+
+**Overview:**
+- Integrated Cocobase JavaScript SDK as the primary backend for authentication and data.
+- Switched email/password auth and Google login to use Cocobase sessions (`db.user`, `db.isAuthenticated()`).
+- Prepared the app to move from mock/demo data to real collections.
+
+**Auth & Session Changes:**
+- Updated `src/context/AuthContext.tsx` to:
+  - Use `db.register`, `db.login`, `db.logout`, and `db.isAuthenticated` instead of `db.auth.*`.
+  - Store the authenticated Cocobase user in context from `db.user` after login/register/Google auth.
+  - Add `loginWithGoogle(token)` helper that logs in with Google via Cocobase and syncs context state.
+- Updated `src/pages/Login.tsx` and `src/pages/Register.tsx` to:
+  - Use `useAuth()` for all auth flows (including Google) instead of calling `db.auth` directly.
+  - Add console logging for Cocobase errors to aid debugging.
+- Added `src/lib/cocobase.ts` debug logging to verify `VITE_COCOBASE_API_KEY` and `VITE_COCOBASE_PROJECT_ID` loading.
+
+**Environment & Setup:**
+- Confirmed Vite env variables for Cocobase:
+  - `VITE_COCOBASE_API_KEY`
+  - `VITE_COCOBASE_PROJECT_ID`
+- Resolved 422 `x-api-key` errors by correctly wiring API key + project ID and restarting the dev server.
+
+**Collections / Data Model:**
+- Created a `members` collection in Cocobase (performed by: user).
+- Planned `members` schema to include fields like `name`, `email`, `phone`, `role`, `status`, `joinedAt`, `avatar`, and `ownerId` (Cocobase user id), to support real member management.
+- Wired `src/pages/Members.tsx` to the real `members` collection using Cocobase document APIs (`createDocument`, `listDocuments`, `deleteDocument`) and React Query.
+- Each member document is stored with an `ownerId` equal to the authenticated Cocobase user ID (per-user workspace isolation).
+- Decided to progressively migrate all mock data (Members, Events, Announcements, Files, Analytics) to real Cocobase collections.
+
+**Files Modified:**
+- `src/context/AuthContext.tsx`
+- `src/pages/Login.tsx`
+- `src/pages/Register.tsx`
+- `src/lib/cocobase.ts`
+- `src/pages/Members.tsx`
+- `changelog.md`
+
+---
+
 ## 2025-02-11 18:45:00
 
 ### ✨ Major Feature Release - Performance, Admin Dashboard, Enhanced UX
@@ -279,3 +321,147 @@ All notable changes to ClubManager will be documented in this file. Newest chang
 ## Notes
 
 This changelog tracks all significant changes to the ClubManager platform. Each entry includes the date, description of changes, and affected files/features.
+
+## 2025-11-18 20:15:00
+
+### 📅 Events & 📣 Announcements wired to Cocobase
+
+**Overview:**
+- Connected Events and Announcements pages to real Cocobase collections using React Query.
+- Removed mock/demo data for these pages so they now operate entirely on real backend documents, scoped per Cocobase user.
+
+**Events (`events` collection):**
+- Updated `src/pages/Events.tsx` to load events from Cocobase via `db.listDocuments('events', { filters: { ownerId }, sort: 'date', order: 'asc' })` with React Query.
+- Create Event modal now persists new events to Cocobase with `db.createDocument('events', { title, description, date, time, location, maxAttendees, attendees, rsvp, image, ownerId })`.
+- RSVP button now updates the corresponding document using `db.updateDocument('events', id, { rsvp, attendees })`, keeping attendee counts and RSVP state in sync with the backend.
+- Existing UI (cards, filters for All / Upcoming / Past, countdown badge) is preserved while being backed by real data.
+
+**Announcements (`announcements` collection):**
+- Updated `src/pages/Announcements.tsx` to fetch announcements from Cocobase with `db.listDocuments('announcements', { filters: { ownerId }, sort: 'created_at', order: 'desc' })` using React Query.
+- Posting a new announcement now calls `db.createDocument('announcements', { authorName, authorAvatar, authorRole, content, createdAt, likes, comments, isLiked, ownerId })` instead of only updating local state.
+- Like/unlike actions now persist to Cocobase via `db.updateDocument('announcements', id, { isLiked, likes })`, so reactions are stored with the document.
+- Preserved the existing UX: autosave drafts via `useDrafts`, keyboard shortcuts (Cmd/Ctrl+S to save draft, Cmd/Ctrl+Enter to publish), and the same glassmorphic feed layout.
+
+**Per-user isolation:**
+- Both `events` and `announcements` documents store an `ownerId` equal to the authenticated Cocobase `user.id`, ensuring each user sees only their own workspace data.
+
+**Files Modified:**
+- `src/pages/Events.tsx`
+- `src/pages/Announcements.tsx`
+- `changelog.md`
+
+## 2025-11-18 20:30:00
+
+### 📊 Dashboard stats connected to Cocobase
+
+**Overview:**
+- Replaced all mock dashboard stats and fake recent activity with real data from Cocobase collections.
+- Ensured that when there is no data yet, the dashboard honestly shows `0` counts and a friendly empty-state message.
+
+**Stats Cards:**
+- `Total Members` now displays the count of documents in the `members` collection for the current `ownerId`.
+- `Upcoming Events` shows the number of events in the `events` collection with a scheduled date/time in the future for the current `ownerId`.
+- `Active Today` shows the number of new activities today based on members joined, events created, and announcements posted today.
+- `Total Announcements` shows the count of documents in the `announcements` collection for the current `ownerId`.
+
+**Recent Activity Feed:**
+- Replaced hard-coded sample activity with a real feed composed from the latest:
+  - Member who joined (`members` collection).
+  - Event that was created (`events` collection).
+  - Announcement that was posted (`announcements` collection).
+- Each activity item now displays a relative time label like "Just now", "5 minutes ago", or "2 days ago" based on the Cocobase timestamps.
+- Shows a clear "No recent activity yet" message when there are no members, events, or announcements.
+
+**Per-user Isolation:**
+- All dashboard stats and recent activity are filtered by `ownerId = user.id`, so each Cocobase user sees only their own community workspace data.
+
+**Files Modified:**
+- `src/pages/Dashboard.tsx`
+- `changelog.md`
+
+## 2025-11-18 21:00:00
+
+### 👥 Workspace multi-user model & invite flow
+
+**Overview:**
+- Introduced a workspace-based multi-user model where the first registered account is the workspace owner.
+- All invited users share the same `workspaceId` and see the same members, events, announcements, and dashboard stats.
+- Added an invite-based onboarding flow using a Coco Mailer stub and a dedicated Accept Invite page.
+
+**Workspace Model:**
+- Defined `workspaceId` derivation:
+  - For the owner: `workspaceId = user.id`.
+  - For invited users: `workspaceId` stored in Cocobase user metadata during invite acceptance.
+- Updated data access to be workspace-aware by using `workspaceId` (via `ownerId` field) in queries instead of the current user id.
+
+**Members & Invites:**
+- Extended `members` collection documents to include:
+  - `workspaceId`, `authUserId`, `status` (`'invited' | 'active' | 'inactive'`), `inviteToken`, and `invitedAt`.
+- Updated `src/pages/Members.tsx` to:
+  - Use `workspaceId` for listing members: `db.listDocuments('members', { filters: { ownerId: workspaceId } })`.
+  - Create invited members with `status: 'invited'` and a generated `inviteToken`.
+  - Call a Coco Mailer stub (`sendInviteEmail`) to "send" an invite email containing a link to `/accept-invite/:token`.
+  - Show a more accurate status, including `invited`, in the members table.
+
+**Coco Mailer Stub:**
+- Added `src/lib/cocomailer.ts` as a thin integration layer for future Coco Mailer wiring.
+  - Exposes `sendInviteEmail({ to, name, role, inviteLink })`.
+  - Currently logs the payload and shows a toast that an invite email was queued.
+  - Ready to be replaced with real Coco Mailer API calls once configured.
+
+**Accept Invite Flow:**
+- Created `src/pages/AcceptInvite.tsx` with glassmorphic UI consistent with the rest of the app:
+  - Loads the `members` document by `inviteToken`.
+  - Shows the invited email, name, and role in a read-only card.
+  - Prompts the user to set and confirm a password.
+  - Calls `register(name, email, password, { role, workspaceId })` via `AuthContext` to create a Cocobase user tied to the workspace.
+  - Updates the original member document with `status: 'active'`, `authUserId`, `joinedAt`, and clears `inviteToken`.
+  - Redirects to `/dashboard` on success.
+- Registered a public route in `src/App.tsx`:
+  - `path="/accept-invite/:token"` → lazy-loaded `AcceptInvite` page.
+
+**Workspace-aware Pages:**
+- Updated pages to use `workspaceId = user.workspaceId ?? user.id` so invited users see the same workspace data as the owner:
+  - `src/pages/Members.tsx` (members listing and creation)
+  - `src/pages/Events.tsx` (events listing and creation)
+  - `src/pages/Announcements.tsx` (announcements listing and creation)
+  - `src/pages/Dashboard.tsx` (stats and recent activity aggregation)
+
+**Files Created:**
+- `src/lib/cocomailer.ts`
+- `src/pages/AcceptInvite.tsx`
+
+**Files Modified:**
+- `src/context/AuthContext.tsx` (extended `register` to accept extra metadata)
+- `src/pages/Members.tsx`
+- `src/pages/Events.tsx`
+- `src/pages/Announcements.tsx`
+- `src/pages/Dashboard.tsx`
+- `src/App.tsx`
+- `changelog.md`
+
+## 2025-11-18 21:15:00
+
+### 📧 Coco Mailer wired via Cocobase Cloud Function
+
+**Overview:**
+- Replaced the local invite email stub with a real HTTP call to a Cocobase Cloud Function so that member invites trigger actual emails via Coco Mailer.
+
+**Implementation Details:**
+- Updated `src/lib/cocomailer.ts`:
+  - Reads the function URL from `VITE_COCO_MAILER_INVITE_URL`.
+  - Sends a `POST` request with JSON body `{ to, name, role, inviteLink }` when `sendInviteEmail` is called.
+  - Shows success or error toasts depending on the HTTP response.
+  - Falls back to logging + a "queued" toast if `VITE_COCO_MAILER_INVITE_URL` is not configured, so local development still works.
+
+**Setup Required:**
+- In Cocobase, create a Cloud Function that:
+  - Receives the invite payload as JSON.
+  - Uses the Coco Mailer integration (configured in the Integrations tab) to send the actual email.
+- In the frontend `.env` (Vite):
+  - Set `VITE_COCO_MAILER_INVITE_URL` to the HTTP URL of that Cloud Function.
+
+**Files Modified:**
+- `src/lib/cocomailer.ts`
+- `changelog.md`
+

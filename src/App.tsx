@@ -28,6 +28,7 @@ const Blog = lazy(() => import("./pages/Blog"));
 const Careers = lazy(() => import("./pages/Careers"));
 const Features = lazy(() => import("./pages/Features"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
+const AcceptInvite = lazy(() => import("./pages/AcceptInvite"));
 
 const queryClient = new QueryClient();
 
@@ -56,6 +57,7 @@ const App = () => (
                   <Route path="/" element={<Landing />} />
                   <Route path="/login" element={<Login />} />
                   <Route path="/register" element={<Register />} />
+                  <Route path="/accept-invite/:token" element={<AcceptInvite />} />
                   <Route path="/pricing" element={<Pricing />} />
                   <Route path="/roadmap" element={<Roadmap />} />
                   <Route path="/about" element={<About />} />

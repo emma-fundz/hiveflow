@@ -8,6 +8,25 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { useAuth } from '@/context/AuthContext';
+import db from '@/lib/cocobase';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { sendInviteEmail } from '@/lib/cocomailer';
+
+interface MemberData {
+  name: string;
+  email: string;
+  phone: string;
+  role: string;
+  joinedAt: string;
+  avatar: string;
+  status: 'active' | 'inactive' | 'invited';
+  ownerId: string;
+  workspaceId?: string;
+  authUserId?: string | null;
+  inviteToken?: string | null;
+  invitedAt?: string | null;
+}
 
 interface Member {
   id: string;
@@ -17,36 +36,135 @@ interface Member {
   role: string;
   joinedDate: string;
   avatar: string;
-  status: 'active' | 'inactive';
+  status: 'active' | 'inactive' | 'invited';
 }
 
-const mockMembers: Member[] = [
-  { id: '1', name: 'Sarah Chen', email: 'sarah@example.com', phone: '+1 234 567 890', role: 'Admin', joinedDate: '2024-01-15', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah', status: 'active' },
-  { id: '2', name: 'Mike Johnson', email: 'mike@example.com', phone: '+1 234 567 891', role: 'Member', joinedDate: '2024-02-20', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Mike', status: 'active' },
-  { id: '3', name: 'Emma Wilson', email: 'emma@example.com', phone: '+1 234 567 892', role: 'Moderator', joinedDate: '2024-01-28', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Emma', status: 'active' },
-  { id: '4', name: 'James Brown', email: 'james@example.com', phone: '+1 234 567 893', role: 'Member', joinedDate: '2024-03-10', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=James', status: 'inactive' },
-  { id: '5', name: 'Olivia Davis', email: 'olivia@example.com', phone: '+1 234 567 894', role: 'Member', joinedDate: '2024-02-05', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Olivia', status: 'active' },
-];
-
 const Members = () => {
-  const [members, setMembers] = useState<Member[]>(mockMembers);
+  const { user } = useAuth();
+  const workspaceId = (user as any)?.workspaceId ?? (user as any)?.id;
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [newPhone, setNewPhone] = useState('');
+  const [newRole, setNewRole] = useState('Member');
+
+  const {
+    data: memberDocs = [],
+    isLoading,
+    isError,
+  } = useQuery({
+    queryKey: ['members', workspaceId],
+    queryFn: async () => {
+      if (!workspaceId) return [];
+      const docs = await db.listDocuments<MemberData>('members', {
+        filters: { ownerId: workspaceId },
+        sort: 'created_at',
+        order: 'desc',
+      });
+      return docs;
+    },
+    enabled: !!workspaceId,
+  });
+
+  const members: Member[] = memberDocs.map((doc: any) => ({
+    id: doc.id,
+    name: doc.data?.name,
+    email: doc.data?.email,
+    phone: doc.data?.phone ?? '',
+    role: doc.data?.role ?? 'Member',
+    joinedDate: doc.data?.joinedAt ?? doc.created_at,
+    avatar:
+      doc.data?.avatar ||
+      `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(
+        doc.data?.name || doc.data?.email || 'Member',
+      )}`,
+    status: (doc.data?.status as 'active' | 'inactive' | 'invited') ?? 'active',
+  }));
+
+  const createMemberMutation = useMutation({
+    mutationFn: async () => {
+      if (!workspaceId) throw new Error('Not authenticated');
+      const now = new Date().toISOString();
+      const inviteToken = Math.random().toString(36).slice(2) + Date.now().toString(36);
+      const data: MemberData = {
+        name: newName,
+        email: newEmail,
+        phone: newPhone,
+        role: newRole,
+        status: 'invited',
+        joinedAt: now,
+        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(
+          newName || newEmail || 'Member',
+        )}`,
+        ownerId: workspaceId,
+        workspaceId,
+        authUserId: null,
+        inviteToken,
+        invitedAt: now,
+      };
+      const doc = await db.createDocument<MemberData>('members', data);
+
+      try {
+        const inviteLink = `${window.location.origin}/accept-invite/${inviteToken}`;
+        await sendInviteEmail({
+          to: newEmail,
+          name: newName || newEmail,
+          role: newRole,
+          inviteLink,
+        });
+      } catch (err) {
+        console.log('COCO_MAILER INVITE ERROR:', err);
+      }
+
+      return doc;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['members', workspaceId] });
+      toast.success('Member invited successfully!');
+      setIsAddModalOpen(false);
+      setNewName('');
+      setNewEmail('');
+      setNewPhone('');
+      setNewRole('Member');
+    },
+    onError: (err: any) => {
+      console.log('COCOBASE MEMBERS CREATE ERROR:', err);
+      toast.error('Failed to add member');
+    },
+  });
+
+  const deleteMemberMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await db.deleteDocument('members', id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['members', user?.id] });
+      toast.success('Member removed');
+    },
+    onError: (err: any) => {
+      console.log('COCOBASE MEMBERS DELETE ERROR:', err);
+      toast.error('Failed to remove member');
+    },
+  });
 
   const filteredMembers = members.filter(member =>
     member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     member.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleAddMember = (e: React.FormEvent) => {
+  const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success('Member added successfully!');
-    setIsAddModalOpen(false);
+    if (!newName || !newEmail) {
+      toast.error('Name and email are required');
+      return;
+    }
+    await createMemberMutation.mutateAsync();
   };
 
   const handleDeleteMember = (id: string) => {
-    setMembers(members.filter(m => m.id !== id));
-    toast.success('Member removed');
+    deleteMemberMutation.mutate(id);
   };
 
   return (
@@ -72,22 +190,42 @@ const Members = () => {
             <form onSubmit={handleAddMember} className="space-y-4">
               <div className="space-y-2">
                 <Label>Name</Label>
-                <Input placeholder="John Doe" required />
+                <Input
+                  placeholder="John Doe"
+                  required
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                />
               </div>
               <div className="space-y-2">
                 <Label>Email</Label>
-                <Input type="email" placeholder="john@example.com" required />
+                <Input
+                  type="email"
+                  placeholder="john@example.com"
+                  required
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                />
               </div>
               <div className="space-y-2">
                 <Label>Phone</Label>
-                <Input type="tel" placeholder="+1 234 567 890" />
+                <Input
+                  type="tel"
+                  placeholder="+1 234 567 890"
+                  value={newPhone}
+                  onChange={(e) => setNewPhone(e.target.value)}
+                />
               </div>
               <div className="space-y-2">
                 <Label>Role</Label>
-                <select className="w-full p-2 rounded-lg bg-background border border-border">
-                  <option>Member</option>
-                  <option>Moderator</option>
-                  <option>Admin</option>
+                <select
+                  className="w-full p-2 rounded-lg bg-background border border-border"
+                  value={newRole}
+                  onChange={(e) => setNewRole(e.target.value)}
+                >
+                  <option value="Member">Member</option>
+                  <option value="Moderator">Moderator</option>
+                  <option value="Admin">Admin</option>
                 </select>
               </div>
               <Button type="submit" className="w-full bg-gradient-to-r from-neon-cyan to-neon-indigo">
@@ -112,6 +250,12 @@ const Members = () => {
       </Card>
 
       {/* Members Table */}
+      {isLoading && (
+        <p className="text-muted-foreground text-sm px-1">Loading members...</p>
+      )}
+      {isError && (
+        <p className="text-destructive text-sm px-1">Failed to load members.</p>
+      )}
       <Card className="glass-card p-6 overflow-x-auto">
         <table className="w-full">
           <thead>

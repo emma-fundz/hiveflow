@@ -8,6 +8,20 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from 'sonner';
 import { useDrafts } from '@/hooks/useDrafts';
 import { useAuth } from '@/context/AuthContext';
+import db from '@/lib/cocobase';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+
+interface AnnouncementData {
+  authorName: string;
+  authorAvatar: string;
+  authorRole: string;
+  content: string;
+  createdAt: string;
+  likes: number;
+  comments: number;
+  isLiked: boolean;
+  ownerId: string;
+}
 
 interface Announcement {
   id: string;
@@ -23,51 +37,10 @@ interface Announcement {
   isLiked: boolean;
 }
 
-const mockAnnouncements: Announcement[] = [
-  {
-    id: '1',
-    author: {
-      name: 'Sarah Chen',
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah',
-      role: 'Admin'
-    },
-    content: '🎉 **Exciting News!** We\'re launching a new mentorship program starting next month. Sign up now to become a mentor or find your perfect match!',
-    timestamp: '2 hours ago',
-    likes: 42,
-    comments: 8,
-    isLiked: false
-  },
-  {
-    id: '2',
-    author: {
-      name: 'Mike Johnson',
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Mike',
-      role: 'Moderator'
-    },
-    content: '📅 **Reminder:** Don\'t forget about tomorrow\'s community meetup at Central Park! Weather looks perfect. See you all there! 🌞',
-    timestamp: '5 hours ago',
-    likes: 67,
-    comments: 15,
-    isLiked: true
-  },
-  {
-    id: '3',
-    author: {
-      name: 'Emma Wilson',
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Emma',
-      role: 'Admin'
-    },
-    content: '🚀 **Platform Update:** We\'ve just rolled out new features including dark mode improvements and faster loading times. Check it out!',
-    timestamp: '1 day ago',
-    likes: 89,
-    comments: 23,
-    isLiked: true
-  },
-];
-
 const Announcements = () => {
   const { user } = useAuth();
-  const [announcements, setAnnouncements] = useState<Announcement[]>(mockAnnouncements);
+  const queryClient = useQueryClient();
+  const workspaceId = (user as any)?.workspaceId ?? (user as any)?.id;
   const [newAnnouncement, setNewAnnouncement] = useState('');
   
   const draftKey = `announcement-draft-${user?.id || 'guest'}`;
@@ -75,6 +48,93 @@ const Announcements = () => {
     key: draftKey,
     value: newAnnouncement,
     delay: 5000,
+  });
+
+  const {
+    data: announcementDocs = [],
+    isLoading,
+    isError,
+  } = useQuery({
+    queryKey: ['announcements', workspaceId],
+    queryFn: async () => {
+      if (!workspaceId) return [];
+      const docs = await db.listDocuments<AnnouncementData>('announcements', {
+        filters: { ownerId: workspaceId },
+        sort: 'created_at',
+        order: 'desc',
+      });
+      return docs;
+    },
+    enabled: !!workspaceId,
+  });
+
+  const announcements: Announcement[] = announcementDocs.map((doc: any) => ({
+    id: doc.id,
+    author: {
+      name: doc.data?.authorName,
+      avatar:
+        doc.data?.authorAvatar ||
+        'https://api.dicebear.com/7.x/avataaars/svg?seed=You',
+      role: doc.data?.authorRole ?? 'Admin',
+    },
+    content: doc.data?.content,
+    timestamp: doc.data?.createdAt
+      ? new Date(doc.data.createdAt).toLocaleString()
+      : '',
+    likes: doc.data?.likes ?? 0,
+    comments: doc.data?.comments ?? 0,
+    isLiked: !!doc.data?.isLiked,
+  }));
+
+  const createAnnouncementMutation = useMutation({
+    mutationFn: async () => {
+      if (!workspaceId) throw new Error('Not authenticated');
+      const now = new Date().toISOString();
+      const data: AnnouncementData = {
+        authorName: (user as any)?.name || 'You',
+        authorAvatar:
+          (user as any)?.avatar ||
+          'https://api.dicebear.com/7.x/avataaars/svg?seed=You',
+        authorRole: 'Admin',
+        content: newAnnouncement,
+        createdAt: now,
+        likes: 0,
+        comments: 0,
+        isLiked: false,
+        ownerId: workspaceId,
+      };
+      return db.createDocument<AnnouncementData>('announcements', data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['announcements', workspaceId] });
+      setNewAnnouncement('');
+      clearDraft();
+      toast.success('Announcement posted!');
+    },
+    onError: (err: any) => {
+      console.log('COCOBASE ANNOUNCEMENTS CREATE ERROR:', err);
+      toast.error('Failed to post announcement');
+    },
+  });
+
+  const likeMutation = useMutation({
+    mutationFn: async (payload: { id: string; isLiked: boolean; likes: number }) => {
+      const newIsLiked = !payload.isLiked;
+      const newLikes = newIsLiked
+        ? payload.likes + 1
+        : Math.max(0, payload.likes - 1);
+      await db.updateDocument<AnnouncementData>('announcements', payload.id, {
+        isLiked: newIsLiked,
+        likes: newLikes,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['announcements', user?.id] });
+    },
+    onError: (err: any) => {
+      console.log('COCOBASE ANNOUNCEMENTS LIKE ERROR:', err);
+      toast.error('Failed to update like');
+    },
   });
 
   // Load draft on mount
@@ -105,42 +165,22 @@ const Announcements = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [newAnnouncement]);
 
-  const handlePost = () => {
+  const handlePost = async () => {
     if (!newAnnouncement.trim()) {
       toast.error('Please write something');
       return;
     }
-
-    const announcement: Announcement = {
-      id: Date.now().toString(),
-      author: {
-        name: user?.name || 'You',
-        avatar: user?.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=You',
-        role: 'Admin'
-      },
-      content: newAnnouncement,
-      timestamp: 'Just now',
-      likes: 0,
-      comments: 0,
-      isLiked: false
-    };
-
-    setAnnouncements([announcement, ...announcements]);
-    setNewAnnouncement('');
-    clearDraft();
-    toast.success('Announcement posted!');
+    await createAnnouncementMutation.mutateAsync();
   };
 
   const handleLike = (id: string) => {
-    setAnnouncements(announcements.map(announcement =>
-      announcement.id === id
-        ? {
-            ...announcement,
-            isLiked: !announcement.isLiked,
-            likes: announcement.isLiked ? announcement.likes - 1 : announcement.likes + 1
-          }
-        : announcement
-    ));
+    const announcement = announcements.find((a) => a.id === id);
+    if (!announcement) return;
+    likeMutation.mutate({
+      id,
+      isLiked: announcement.isLiked,
+      likes: announcement.likes,
+    });
   };
 
   return (
@@ -159,7 +199,7 @@ const Announcements = () => {
         <Card className="glass-card p-6">
           <div className="flex items-start space-x-4">
             <Avatar className="w-12 h-12 ring-2 ring-primary">
-              <AvatarImage src="https://api.dicebear.com/7.x/avataaars/svg?seed=You" />
+              <AvatarImage src={(user as any)?.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=You'} />
               <AvatarFallback>Y</AvatarFallback>
             </Avatar>
             <div className="flex-1 space-y-4">
@@ -188,6 +228,12 @@ const Announcements = () => {
       </motion.div>
 
       {/* Announcements Feed */}
+      {isLoading && (
+        <p className="text-sm text-muted-foreground">Loading announcements...</p>
+      )}
+      {isError && (
+        <p className="text-sm text-destructive">Failed to load announcements.</p>
+      )}
       <div className="space-y-6">
         {announcements.map((announcement, index) => (
           <motion.div
