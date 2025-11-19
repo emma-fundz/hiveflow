@@ -41,6 +41,9 @@ export const Navbar = () => {
                 <Link to="/events" className="text-foreground hover:text-primary transition-colors">
                   Events
                 </Link>
+                <Link to="/announcements" className="text-foreground hover:text-primary transition-colors">
+                  Announcements
+                </Link>
                 {user?.email === 'admin@clubmanager.com' && (
                   <Link to="/admin" className="text-foreground hover:text-primary transition-colors">
                     Admin
@@ -112,6 +115,9 @@ export const Navbar = () => {
                 </Link>
                 <Link to="/events" className="block py-2 text-foreground hover:text-primary transition-colors">
                   Events
+                </Link>
+                <Link to="/announcements" className="block py-2 text-foreground hover:text-primary transition-colors">
+                  Announcements
                 </Link>
                 {user?.email === 'admin@clubmanager.com' && (
                   <Link to="/admin" className="block py-2 text-foreground hover:text-primary transition-colors">

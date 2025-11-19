@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { useDrafts } from '@/hooks/useDrafts';
 import { useAuth } from '@/context/AuthContext';
@@ -136,7 +138,7 @@ const Announcements = () => {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['announcements', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['announcements', workspaceId] });
     },
     onError: (err: any) => {
       console.log('COCOBASE ANNOUNCEMENTS LIKE ERROR:', err);

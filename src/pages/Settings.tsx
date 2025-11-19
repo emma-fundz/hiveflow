@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { User, Bell, Shield, Palette, LogOut } from 'lucide-react';
+import { User, Bell, Shield, Palette, LogOut, Trash2 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -315,7 +315,7 @@ const Settings = () => {
               disabled={deleting}
               className="w-full justify-start text-destructive hover:text-destructive border-destructive/50"
             >
-              <DeleteAccountIcon />
+              <Trash2 className="w-4 h-4 mr-2" />
               {deleting ? 'Deleting account...' : 'Delete Account'}
             </Button>
           </div>

@@ -87,15 +87,38 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     (async () => {
       try {
+        const stored =
+          typeof window !== "undefined"
+            ? window.localStorage.getItem("hf_auth_user")
+            : null;
+
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored);
+            setUser(parsed);
+            setLoading(false);
+            return;
+          } catch {
+            // ignore parse errors and fall through to live check
+          }
+        }
+
         const ok = await db.isAuthenticated();
         if (ok) {
           const enriched = await buildUserWithWorkspace();
           setUser(enriched);
+          if (typeof window !== "undefined") {
+            window.localStorage.setItem("hf_auth_user", JSON.stringify(enriched));
+          }
         } else {
           setUser(null);
+          if (typeof window !== "undefined") {
+            window.localStorage.removeItem("hf_auth_user");
+          }
         }
       } catch (err) {
         console.warn("Auth restore failed", err);
+        setUser(null);
       }
       setLoading(false);
     })();
@@ -113,6 +136,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (!ok) throw new Error("Registration failed");
       const enriched = await buildUserWithWorkspace();
       setUser(enriched);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("hf_auth_user", JSON.stringify(enriched));
+      }
     } catch (err) {
       console.log("COCOBASE REGISTER ERROR:", err);
       throw err;
@@ -126,6 +152,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (!ok) throw new Error("Login failed");
       const enriched = await buildUserWithWorkspace();
       setUser(enriched);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("hf_auth_user", JSON.stringify(enriched));
+      }
     } catch (err) {
       console.log("COCOBASE LOGIN ERROR:", err);
       throw err;
@@ -138,11 +167,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (!ok) throw new Error("Google login failed");
     const enriched = await buildUserWithWorkspace();
     setUser(enriched);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("hf_auth_user", JSON.stringify(enriched));
+    }
   };
 
   const logout = async () => {
     await db.logout();
     setUser(null);
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("hf_auth_user");
+    }
   };
 
   return (
