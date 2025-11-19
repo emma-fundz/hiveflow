@@ -13,6 +13,8 @@ import db from '@/lib/cocobase';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { sendInviteEmail } from '@/lib/cocomailer';
 
+const APP_BASE_URL = import.meta.env.VITE_APP_BASE_URL as string | undefined;
+
 interface MemberData {
   name: string;
   email: string;
@@ -20,12 +22,8 @@ interface MemberData {
   role: string;
   joinedAt: string;
   avatar: string;
-  status: 'active' | 'inactive' | 'invited';
+  status: 'active' | 'inactive';
   ownerId: string;
-  workspaceId?: string;
-  authUserId?: string | null;
-  inviteToken?: string | null;
-  invitedAt?: string | null;
 }
 
 interface Member {
@@ -36,7 +34,7 @@ interface Member {
   role: string;
   joinedDate: string;
   avatar: string;
-  status: 'active' | 'inactive' | 'invited';
+  status: 'active' | 'inactive';
 }
 
 const Members = () => {
@@ -80,14 +78,28 @@ const Members = () => {
       `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(
         doc.data?.name || doc.data?.email || 'Member',
       )}`,
-    status: (doc.data?.status as 'active' | 'inactive' | 'invited') ?? 'active',
+    status: (doc.data?.status as 'active' | 'inactive') ?? 'active',
   }));
 
   const createMemberMutation = useMutation({
     mutationFn: async () => {
       if (!workspaceId) throw new Error('Not authenticated');
       const now = new Date().toISOString();
-      const inviteToken = Math.random().toString(36).slice(2) + Date.now().toString(36);
+      const tokenPayload = {
+        email: newEmail,
+        name: newName || newEmail,
+        role: newRole,
+        workspaceId,
+        issuedAt: now,
+      };
+      let inviteToken: string;
+      try {
+        inviteToken = window.btoa(JSON.stringify(tokenPayload));
+      } catch (err) {
+        console.log('INVITE TOKEN ENCODE ERROR:', err);
+        throw new Error('Failed to generate invite link');
+      }
+
       const data: MemberData = {
         name: newName,
         email: newEmail,
@@ -99,26 +111,92 @@ const Members = () => {
           newName || newEmail || 'Member',
         )}`,
         ownerId: workspaceId,
-        workspaceId,
-        authUserId: null,
-        inviteToken,
-        invitedAt: now,
       };
-      const doc = await db.createDocument<MemberData>('members', data);
+
+      console.log(
+        'COCOBASE MEMBERS CREATE REQUEST:',
+        JSON.stringify(
+          {
+            collection: 'members',
+            workspaceId,
+            payload: data,
+          },
+          null,
+          2,
+        ),
+      );
 
       try {
-        const inviteLink = `${window.location.origin}/accept-invite/${inviteToken}`;
-        await sendInviteEmail({
-          to: newEmail,
-          name: newName || newEmail,
-          role: newRole,
-          inviteLink,
-        });
-      } catch (err) {
-        console.log('COCO_MAILER INVITE ERROR:', err);
-      }
+        const doc = await db.createDocument<MemberData>('members', data);
 
-      return doc;
+        console.log(
+          'COCOBASE MEMBERS CREATE RESPONSE:',
+          JSON.stringify(
+            {
+              id: (doc as any)?.id,
+              created_at: (doc as any)?.created_at,
+              data: (doc as any)?.data,
+            },
+            null,
+            2,
+          ),
+        );
+
+        try {
+          const baseUrl = APP_BASE_URL || window.location.origin;
+          const inviteLink = `${baseUrl}/accept-invite/${encodeURIComponent(inviteToken)}`;
+          await sendInviteEmail({
+            to: newEmail,
+            name: newName || newEmail,
+            role: newRole,
+            inviteLink,
+          });
+        } catch (err: any) {
+          const mailerError = {
+            message: err?.message,
+            name: err?.name,
+            code: (err as any)?.code,
+          };
+          console.error('COCO_MAILER INVITE ERROR:', JSON.stringify(mailerError, null, 2));
+        }
+
+        return doc;
+      } catch (err: any) {
+        const serializedError: any = {
+          message: err?.message,
+          name: err?.name,
+        };
+        if (err?.status || err?.statusCode) {
+          serializedError.status = err.status || err.statusCode;
+        }
+        if ((err as any)?.code) {
+          serializedError.code = (err as any).code;
+        }
+        if ((err as any)?.response) {
+          try {
+            serializedError.responseStatus = (err as any).response.status;
+            serializedError.responseStatusText = (err as any).response.statusText;
+          } catch {
+            // ignore
+          }
+        }
+
+        console.error(
+          'COCOBASE MEMBERS CREATE ERROR (SERIALIZED):',
+          JSON.stringify(serializedError, null, 2),
+        );
+
+        try {
+          console.error(
+            'COCOBASE MEMBERS CREATE ERROR (RAW JSON):',
+            JSON.stringify(err, Object.getOwnPropertyNames(err), 2),
+          );
+        } catch {
+          console.error('COCOBASE MEMBERS CREATE ERROR (RAW STRING):', String(err));
+        }
+
+        throw err;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['members', workspaceId] });
@@ -130,7 +208,15 @@ const Members = () => {
       setNewRole('Member');
     },
     onError: (err: any) => {
-      console.log('COCOBASE MEMBERS CREATE ERROR:', err);
+      const onErrorInfo = {
+        message: err?.message,
+        name: err?.name,
+        stack: err?.stack,
+      };
+      console.error(
+        'COCOBASE MEMBERS CREATE ERROR (REACT-QUERY ONERROR):',
+        JSON.stringify(onErrorInfo, null, 2),
+      );
       toast.error('Failed to add member');
     },
   });

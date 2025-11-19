@@ -1,0 +1,9 @@
+[[redirects]]
+from = "/"
+to = "/index.html"
+status = 200
+
+[[redirects]]
+from = "/accept-invite/:token"
+to = "/accept-invite/:token"
+status = 200

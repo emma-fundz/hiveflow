@@ -16,6 +16,26 @@ interface MemberInvite {
   workspaceId: string;
 }
 
+interface InviteTokenPayload {
+  email: string;
+  name?: string;
+  role?: string;
+  workspaceId: string;
+  issuedAt?: string;
+}
+
+function decodeInviteToken(token: string): InviteTokenPayload | null {
+  try {
+    const decoded = decodeURIComponent(token);
+    const json = window.atob(decoded);
+    const payload = JSON.parse(json);
+    return payload;
+  } catch (err) {
+    console.log('INVITE TOKEN DECODE ERROR:', err);
+    return null;
+  }
+}
+
 const AcceptInvite = () => {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
@@ -34,8 +54,15 @@ const AcceptInvite = () => {
         return;
       }
       try {
+        const payload = decodeInviteToken(token);
+        if (!payload || !payload.email || !payload.workspaceId) {
+          toast.error('Invalid or expired invite link.');
+          setLoading(false);
+          return;
+        }
+
         const docs: any[] = await db.listDocuments('members', {
-          filters: { inviteToken: token },
+          filters: { ownerId: payload.workspaceId, email: payload.email },
           sort: 'created_at',
           order: 'desc',
         });
@@ -48,10 +75,10 @@ const AcceptInvite = () => {
         const data = doc.data || {};
         setInvite({
           id: doc.id,
-          email: data.email,
-          name: data.name || data.email,
-          role: data.role || 'Member',
-          workspaceId: data.workspaceId || data.ownerId,
+          email: payload.email,
+          name: payload.name || data.name || payload.email,
+          role: payload.role || data.role || 'Member',
+          workspaceId: payload.workspaceId,
         });
       } catch (err) {
         console.log('COCOBASE FETCH INVITE ERROR:', err);
