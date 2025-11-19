@@ -132,8 +132,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   ) => {
     try {
       await db.register(email, password, { name, ...(extra || {}) });
-      const ok = await db.isAuthenticated();
-      if (!ok) throw new Error("Registration failed");
+      let ok = await db.isAuthenticated();
+
+      // Some Cocobase setups may not auto-login after register; try an explicit login
+      if (!ok) {
+        try {
+          await db.login(email, password);
+          ok = await db.isAuthenticated();
+        } catch (err) {
+          console.log("COCOBASE REGISTER LOGIN ERROR:", err);
+        }
+      }
+
+      if (!ok) {
+        throw new Error("Registration succeeded but login failed");
+      }
       const enriched = await buildUserWithWorkspace();
       setUser(enriched);
       if (typeof window !== "undefined") {

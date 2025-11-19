@@ -592,3 +592,57 @@ This changelog tracks all significant changes to the ClubManager platform. Each 
 - `changelog.md` (this entry)
 
 
+## 2025-11-19 08:20:00
+
+### 🛠️ Registration, session persistence & announcements/navigation fixes
+
+**Overview:**
+- Fixed a regression where new signups sometimes saw "Registration failed" even though the account was actually being created.
+- Hardened auth/session persistence so a page refresh no longer kicks users back to the login screen when they have a valid session.
+- Exposed the Announcements page consistently across desktop and mobile navigation, and fixed a blank-page issue when opening Announcements from the dashboard.
+- Resolved a runtime error on the Settings page caused by an undefined delete-account icon.
+
+**Auth & Registration Flow Fixes (`src/context/AuthContext.tsx`, `src/pages/Register.tsx`):**
+- Updated `AuthContext.register` to be more robust:
+  - Still calls `db.register(email, password, { name, ...extra })` to create a Cocobase user with metadata.
+  - After registration, it now checks `db.isAuthenticated()` and, if false, attempts an explicit `db.login(email, password)`.
+  - Only if both the implicit session and the explicit login attempt fail does it throw an error ("Registration succeeded but login failed").
+  - This prevents false "Registration failed" toasts when Cocobase does not automatically log the new user in after register.
+- Kept the owner-member creation logic in `src/pages/Register.tsx` the same (creating an Admin member row with `displayRole` and `authUserId`), but that logic is isolated in its own try/catch so it cannot cause the registration step to fail.
+
+**Auth Persistence & Refresh (`src/context/AuthContext.tsx`, `src/components/DashboardLayout.tsx`):**
+- Added `localStorage` persistence for the authenticated user:
+  - On successful register/login/Google-login, the enriched user (with `workspaceId` and `role`) is stored under the key `hf_auth_user`.
+  - On logout, `hf_auth_user` is removed.
+  - On app startup, `AuthProvider` first attempts to restore `hf_auth_user` from `localStorage` and only falls back to `db.isAuthenticated()` if nothing is stored.
+- Updated `DashboardLayout` so that:
+  - It shows a centered "Loading your workspace..." screen while auth is still being restored.
+  - It only redirects to `/login` when `loading === false` and there is no authenticated user.
+  - This prevents hard redirects to the login page on every refresh when the user actually has a valid session.
+
+**Announcements Navigation & Blank Page Fix (`src/components/Navbar.tsx`, `src/pages/Announcements.tsx`, `src/pages/Dashboard.tsx`):**
+- Navigation:
+  - Added an **Announcements** link to the authenticated desktop navbar alongside Dashboard, Members, and Events.
+  - Added an **Announcements** item to the authenticated mobile hamburger menu so admins can reach the page easily on phones.
+  - Ensured the Dashboard quick action card "Send Announcement" navigates via React Router (`navigate('/announcements')`) instead of using `window.location.href`, avoiding full page reloads and session loss.
+- Announcements page:
+  - Fixed missing imports by explicitly importing `Label` and `Input` from the UI library at the top of `src/pages/Announcements.tsx`.
+  - Corrected the React Query invalidation in the like mutation to target the workspace-scoped key: `['announcements', workspaceId]` instead of the raw `user.id`.
+  - These fixes resolve the blank screen / runtime errors when opening the Announcements page from the dashboard or mobile nav.
+
+**Settings Page Error Fix (`src/pages/Settings.tsx`):**
+- Replaced the undefined `DeleteAccountIcon` component in the Danger Zone section with the existing `Trash2` icon from `lucide-react`:
+  - Imported `Trash2` alongside the other icons.
+  - Updated the Delete Account button to render `<Trash2 className="w-4 h-4 mr-2" />`.
+- This removes the runtime error on the Settings page and restores the full Danger Zone UI (Logout + Delete Account) for all users.
+
+**Files Modified:**
+- `src/context/AuthContext.tsx`
+- `src/components/DashboardLayout.tsx`
+- `src/components/Navbar.tsx`
+- `src/pages/Announcements.tsx`
+- `src/pages/Register.tsx`
+- `src/pages/Settings.tsx`
+- `changelog.md` (this entry)
+
+
