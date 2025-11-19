@@ -93,7 +93,7 @@ const Members = () => {
         email: newEmail,
         phone: newPhone,
         role: newRole,
-        status: 'invited',
+        status: 'active',
         joinedAt: now,
         avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(
           newName || newEmail || 'Member',
