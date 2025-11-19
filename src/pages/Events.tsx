@@ -54,6 +54,7 @@ const Events = () => {
   const [time, setTime] = useState('');
   const [location, setLocation] = useState('');
   const [maxAttendees, setMaxAttendees] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
 
   const {
     data: eventDocs = [],
@@ -110,6 +111,7 @@ const Events = () => {
         attendees: 0,
         rsvp: false,
         image:
+          imageUrl ||
           'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=400',
         ownerId: workspaceId,
       };
@@ -254,6 +256,14 @@ const Events = () => {
                   required
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Event Image URL (optional)</Label>
+                <Input
+                  placeholder="https://..."
+                  value={imageUrl}
+                  onChange={(e) => setImageUrl(e.target.value)}
                 />
               </div>
               <div className="space-y-2">

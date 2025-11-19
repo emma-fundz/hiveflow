@@ -465,3 +465,130 @@ This changelog tracks all significant changes to the ClubManager platform. Each 
 - `src/lib/cocomailer.ts`
 - `changelog.md`
 
+## 2025-11-19 05:49:00
+
+### 🧩 Multi-user workspace invite flow completion, role-based access, Files, Analytics & Settings
+
+**Overview:**
+- Finalized the multi-user workspace model so that owners and invited members share the same workspace data via `workspaceId`.
+- Completed the invite email flow using the Coco Mailer HTTP API with base64-encoded invite tokens.
+- Implemented admin-only Files, Analytics, and Settings experiences, wired to real Cocobase data.
+
+**Invite Email Flow (Coco Mailer HTTP API):**
+- Updated `src/lib/cocomailer.ts` to send real emails through the Coco Mailer HTTP API instead of a Cocobase Cloud Function:
+  - Uses `VITE_COCO_MAILER_CONFIG_KEY` to build the endpoint: `https://coco-mailer-api.vercel.app/api/send-mail/{configKey}`.
+  - Sends a `POST` request with `{ to, subject, html }`, where `html` is a fully rendered invite email including the invite link.
+  - Shows success and error toasts based on the HTTP response.
+  - Logs and surfaces helpful error messages if the request fails.
+- Simplified and hardened the send payload from the Members page to avoid backend 500 errors.
+
+**Base64 Invite Token & Accept Invite Page:**
+- Changed the invite link format so it no longer relies on storing a random `inviteToken` in the `members` document:
+  - Members page now builds a JSON payload `{ email, name, role, workspaceId, issuedAt }`.
+  - Encodes the payload as a URL-safe base64 string and appends it as `?payload=...` in the invite URL.
+  - Uses `VITE_APP_BASE_URL` so invite links work in both local dev and Netlify production (e.g. `https://your-site.netlify.app/accept-invite?payload=...`).
+- Updated `src/pages/AcceptInvite.tsx` to:
+  - Read and URL-decode the `payload` query parameter.
+  - Base64-decode and `JSON.parse` the invite payload, with error handling for malformed tokens.
+  - Look up the corresponding member by `workspaceId` and `email` instead of an `inviteToken` field.
+  - Register the new user via `register(name, email, password, { role, workspaceId })` using the extended `AuthContext` API.
+  - Update the matching member document to `status: 'active'`, set `authUserId`, `joinedAt`, and clear any obsolete invite metadata.
+  - Redirect to `/dashboard` on success and surface clear errors on failure.
+
+**Auth & Workspace Metadata:**
+- Extended `src/context/AuthContext.tsx` to allow `register` to accept arbitrary extra metadata that is stored on the Cocobase user (e.g. `role`, `workspaceId`).
+- Updated `src/pages/Register.tsx` so that direct sign-ups (non-invite) create the initial workspace owner with an `Admin` role.
+- Standardized workspace derivation across the app:
+  - `workspaceId = user.workspaceId ?? user.id`.
+  - All workspace-aware pages now filter data by `ownerId: workspaceId` to ensure owners and invited members see the same data.
+
+**Role-Based Access Control (RBAC):**
+- Implemented a clear permission model using the user's `role` from Cocobase metadata.
+- Only Admins/owners can:
+  - Invite and remove members (Members page).
+  - Create events (Events page).
+  - Post announcements (Announcements page).
+  - Upload and delete files (Files page).
+  - View Analytics.
+- Updated UI components so non-admins:
+  - Cannot see admin-only actions (buttons and forms are hidden/disabled).
+  - Cannot access Analytics from the sidebar (`src/components/Sidebar.tsx`), and are blocked if they navigate directly.
+  - See read-only views of data where appropriate.
+
+**Members Page Updates (`src/pages/Members.tsx`):**
+- Made the members table workspace-aware by filtering `members` documents using `workspaceId` instead of the raw `user.id`.
+- Simplified the create-member payload to fields that match the Cocobase schema and removed extra/unnecessary fields that previously caused 500 errors.
+- Integrated the new invite flow:
+  - When an Admin invites a member, the app creates a `members` document with `status: 'invited'` and the correct `workspaceId`.
+  - Generates the base64 invite payload and calls `sendInviteEmail` with a Netlify-ready invite URL.
+  - Shows clear success/error toasts for both document creation and email sending.
+- Enforced deletion permissions so only Admins can remove members.
+
+**Events & Announcements (`src/pages/Events.tsx`, `src/pages/Announcements.tsx`):**
+- Switched both pages to be workspace-based, using `ownerId = workspaceId` for all queries and mutations so invited users share the same event and announcement data.
+- Restricted creation of new events and announcements to Admins only; non-admins see the content but cannot create or manage it.
+- Added optional image URL support for events and announcements so admins can attach images (including from the Files page) to content.
+
+**Dashboard & Analytics:**
+- Updated `src/pages/Dashboard.tsx` to aggregate stats and recent activity at the workspace level instead of per-user:
+  - Uses the shared `workspaceId` so that owners and invited members see the same counts and activity.
+  - Quick-action cards are now permission-aware, only showing admin-only actions to admins.
+- Implemented `src/pages/Analytics.tsx` as an Admin-only page wired to real Cocobase data:
+  - Members: reads from the `members` collection for the current `workspaceId`.
+  - Events: reads from the `events` collection.
+  - Announcements: reads from the `announcements` collection.
+  - Derives charts and summary metrics (totals, trends) from these collections.
+  - Redirects or blocks access for non-admin users.
+
+**Files Page (`src/pages/Files.tsx`):**
+- Backed the Files page with a real Cocobase `files` collection that stores per-workspace file metadata:
+  - Fields include `name`, `size`, `type`, `uploadedAt`, a data URL or file URL, and `ownerId: workspaceId`.
+- Implemented file upload using `react-dropzone`:
+  - Admins can drag-and-drop or click to upload.
+  - Files are converted to data URLs and persisted via `db.createDocument('files', ...)`.
+- Added admin-only delete support, calling `db.deleteDocument('files', id)`.
+- Implemented "Copy link" functionality so admins can copy the file URL for use in events, announcements, or elsewhere.
+- Non-admins can view/download files but cannot upload or delete.
+
+**Settings Page (`src/pages/Settings.tsx`):**
+- Implemented Settings with multiple sections:
+  - **Profile:**
+    - Shows the user email as read-only.
+    - Allows editing of basic profile fields (e.g. `name`, `bio`) in the UI.
+  - **Notifications:**
+    - Toggle switches for email and push notifications, stored in local UI state.
+  - **Danger Zone:**
+    - Added Delete Account support via a Cocobase Cloud Function or API.
+- Account Deletion:
+  - Uses `VITE_ACCOUNT_DELETE_URL` from env.
+  - Sends a `DELETE` or `POST` request (depending on configuration) with the current user's identifier.
+  - On success, logs the user out and redirects them away from the app.
+  - Shows confirmation and error toasts around the deletion flow.
+
+**Routing & Netlify SPA Support:**
+- Ensured that the Accept Invite route and all dashboard sub-routes work correctly on Netlify:
+  - Confirmed `/accept-invite` is registered as a public route in `src/App.tsx` and loaded via `React.lazy`.
+  - Accept Invite page no longer requires an auth session, but creates one after successful registration.
+- Added SPA routing configuration:
+  - Created/updated `netlify.toml` with a catch-all redirect sending all paths to `/index.html`.
+  - Added a `_redirects` file with `/* /index.html 200` for Netlify, ensuring deep links to dashboard pages and invite URLs do not 404.
+
+**Files Modified/Created:**
+- `src/context/AuthContext.tsx` (extended `register` metadata usage)
+- `src/lib/cocomailer.ts` (switched from Cocobase Cloud Function to Coco Mailer HTTP API)
+- `src/pages/Register.tsx` (default new owners to Admin role)
+- `src/pages/AcceptInvite.tsx` (base64 payload decoding, workspace-aware member lookup)
+- `src/pages/Members.tsx` (workspace-aware members, simplified payload, invite link generation)
+- `src/pages/Events.tsx` (workspace-based ownerId, role-based create, optional image URL)
+- `src/pages/Announcements.tsx` (workspace-based ownerId, role-based create, optional image URL)
+- `src/pages/Dashboard.tsx` (workspace-level stats and activity, admin-only quick actions)
+- `src/pages/Analytics.tsx` (admin-only analytics wired to Cocobase)
+- `src/pages/Files.tsx` (Cocobase-backed file metadata, admin-only upload/delete, copy link)
+- `src/pages/Settings.tsx` (profile UI, notifications toggles, account deletion flow)
+- `src/components/Sidebar.tsx` (hide Analytics for non-admins)
+- `src/App.tsx` (public Accept Invite route and lazy loading)
+- `netlify.toml` (SPA routing rules)
+- `_redirects` (Netlify-compatible SPA redirect)
+- `changelog.md` (this entry)
+
+

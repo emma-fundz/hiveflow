@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { User, Bell, Shield, Palette, LogOut } from 'lucide-react';
 import { Card } from '@/components/ui/card';
@@ -12,12 +12,33 @@ import { useTheme } from '@/context/ThemeContext';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
+const ACCOUNT_DELETE_URL = import.meta.env
+  .VITE_ACCOUNT_DELETE_URL as string | undefined;
+
 const Settings = () => {
   const { user, logout } = useAuth();
   const { colorBlindMode, setColorBlindMode, isDarkMode, toggleDarkMode } = useTheme();
   const navigate = useNavigate();
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [pushNotifications, setPushNotifications] = useState(true);
+  const [name, setName] = useState(user?.name ?? '');
+  const [bio, setBio] = useState('');
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    if (user?.id) {
+      const stored = localStorage.getItem(`hf_profile_${user.id}`);
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed.name) setName(parsed.name);
+          if (parsed.bio) setBio(parsed.bio);
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }, [user?.id]);
 
   const handleLogout = () => {
     logout();
@@ -27,7 +48,57 @@ const Settings = () => {
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
+    if (user?.id) {
+      localStorage.setItem(
+        `hf_profile_${user.id}`,
+        JSON.stringify({ name, bio }),
+      );
+    }
     toast.success('Profile updated successfully!');
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+    if (!ACCOUNT_DELETE_URL) {
+      toast.error('Account deletion is not configured');
+      return;
+    }
+
+    const confirmText = window.prompt(
+      'Type DELETE to permanently delete your account. This action cannot be undone.',
+    );
+    if (confirmText !== 'DELETE') {
+      toast.info('Account deletion cancelled');
+      return;
+    }
+
+    try {
+      setDeleting(true);
+      const response = await fetch(ACCOUNT_DELETE_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId: (user as any)?.id, email: user?.email }),
+      });
+
+      const text = await response.text();
+
+      if (!response.ok) {
+        console.log('ACCOUNT DELETE ERROR:', response.status, text);
+        toast.error('Failed to delete account');
+        return;
+      }
+
+      toast.success('Account deleted successfully');
+      await logout();
+      navigate('/');
+    } catch (err) {
+      console.log('ACCOUNT DELETE NETWORK ERROR:', err);
+      toast.error('Failed to delete account');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -64,11 +135,11 @@ const Settings = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Full Name</Label>
-                <Input defaultValue={user?.name} />
+                <Input value={name} onChange={(e) => setName(e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label>Email</Label>
-                <Input type="email" defaultValue={user?.email} />
+                <Input type="email" defaultValue={user?.email} disabled />
               </div>
             </div>
 
@@ -78,6 +149,8 @@ const Settings = () => {
                 className="w-full p-3 rounded-lg bg-background border border-border resize-none"
                 rows={4}
                 placeholder="Tell us about yourself..."
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
               />
             </div>
 
@@ -238,10 +311,12 @@ const Settings = () => {
             </Button>
             <Button
               variant="outline"
-              onClick={() => toast.error('Account deletion requires confirmation')}
+              onClick={handleDeleteAccount}
+              disabled={deleting}
               className="w-full justify-start text-destructive hover:text-destructive border-destructive/50"
             >
-              Delete Account
+              <DeleteAccountIcon />
+              {deleting ? 'Deleting account...' : 'Delete Account'}
             </Button>
           </div>
         </Card>

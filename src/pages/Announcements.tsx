@@ -21,6 +21,7 @@ interface AnnouncementData {
   comments: number;
   isLiked: boolean;
   ownerId: string;
+  imageUrl?: string;
 }
 
 interface Announcement {
@@ -45,6 +46,7 @@ const Announcements = () => {
   const isOwner = !(user as any)?.workspaceId;
   const isAdmin = userRole === 'Admin' || isOwner;
   const [newAnnouncement, setNewAnnouncement] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
   
   const draftKey = `announcement-draft-${user?.id || 'guest'}`;
   const { loadDraft, clearDraft, forceSave } = useDrafts({
@@ -105,6 +107,7 @@ const Announcements = () => {
         comments: 0,
         isLiked: false,
         ownerId: workspaceId,
+        imageUrl: imageUrl || undefined,
       };
       return db.createDocument<AnnouncementData>('announcements', data);
     },
@@ -112,6 +115,7 @@ const Announcements = () => {
       queryClient.invalidateQueries({ queryKey: ['announcements', workspaceId] });
       setNewAnnouncement('');
       clearDraft();
+      setImageUrl('');
       toast.success('Announcement posted!');
     },
     onError: (err: any) => {
@@ -218,6 +222,14 @@ const Announcements = () => {
                   rows={4}
                   className="resize-none"
                 />
+                <div className="space-y-2">
+                  <Label>Image URL (optional)</Label>
+                  <Input
+                    placeholder="https://..."
+                    value={imageUrl}
+                    onChange={(e) => setImageUrl(e.target.value)}
+                  />
+                </div>
                 <div className="flex justify-between items-center">
                   <p className="text-xs text-muted-foreground">
                     💡 Tip: Cmd/Ctrl+S to save • Cmd/Ctrl+Enter to publish

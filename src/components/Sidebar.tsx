@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
+import { useAuth } from '@/context/AuthContext';
 
 const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
@@ -26,6 +27,10 @@ const menuItems = [
 
 export const Sidebar = () => {
   const location = useLocation();
+  const { user } = useAuth();
+  const userRole = (user as any)?.role as string | undefined;
+  const isOwner = !(user as any)?.workspaceId;
+  const isAdmin = userRole === 'Admin' || isOwner;
   const [collapsed, setCollapsed] = useState(false);
 
   return (
@@ -43,7 +48,9 @@ export const Sidebar = () => {
       </button>
 
       <div className="p-4 space-y-2 overflow-y-auto h-full">
-        {menuItems.map((item) => {
+        {menuItems
+          .filter((item) => item.label !== 'Analytics' || isAdmin)
+          .map((item) => {
           const Icon = item.icon;
           const isActive = location.pathname === item.path;
 
