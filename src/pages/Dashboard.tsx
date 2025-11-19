@@ -8,6 +8,9 @@ import { useQuery } from '@tanstack/react-query';
 const Dashboard = () => {
   const { user } = useAuth();
   const workspaceId = (user as any)?.workspaceId ?? (user as any)?.id;
+  const userRole = (user as any)?.role as string | undefined;
+  const isOwner = !(user as any)?.workspaceId;
+  const isAdmin = userRole === 'Admin' || isOwner;
   const { data: memberDocs = [] } = useQuery({
     queryKey: ['dashboard-members', workspaceId],
     queryFn: async () => {
@@ -292,35 +295,37 @@ const Dashboard = () => {
         </Card>
       </motion.div>
 
-      {/* Quick Actions */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.6 }}
-        className="grid grid-cols-1 md:grid-cols-3 gap-6"
-      >
-        <Card 
-          className="glass-card p-6 hover:neon-glow-cyan transition-all cursor-pointer hover:scale-105"
-          onClick={() => window.location.href = '/events'}
+      {/* Quick Actions (Admins only) */}
+      {isAdmin && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6 }}
+          className="grid grid-cols-1 md:grid-cols-3 gap-6"
         >
-          <h3 className="text-xl font-semibold mb-2">Create Event</h3>
-          <p className="text-muted-foreground text-sm">Plan your next community gathering</p>
-        </Card>
-        <Card 
-          className="glass-card p-6 hover:neon-glow-cyan transition-all cursor-pointer hover:scale-105"
-          onClick={() => window.location.href = '/announcements'}
-        >
-          <h3 className="text-xl font-semibold mb-2">Send Announcement</h3>
-          <p className="text-muted-foreground text-sm">Keep everyone in the loop</p>
-        </Card>
-        <Card 
-          className="glass-card p-6 hover:neon-glow-cyan transition-all cursor-pointer hover:scale-105"
-          onClick={() => window.location.href = '/stats'}
-        >
-          <h3 className="text-xl font-semibold mb-2">View Reports</h3>
-          <p className="text-muted-foreground text-sm">Analyze community metrics</p>
-        </Card>
-      </motion.div>
+          <Card 
+            className="glass-card p-6 hover:neon-glow-cyan transition-all cursor-pointer hover:scale-105"
+            onClick={() => window.location.href = '/events'}
+          >
+            <h3 className="text-xl font-semibold mb-2">Create Event</h3>
+            <p className="text-muted-foreground text-sm">Plan your next community gathering</p>
+          </Card>
+          <Card 
+            className="glass-card p-6 hover:neon-glow-cyan transition-all cursor-pointer hover:scale-105"
+            onClick={() => window.location.href = '/announcements'}
+          >
+            <h3 className="text-xl font-semibold mb-2">Send Announcement</h3>
+            <p className="text-muted-foreground text-sm">Keep everyone in the loop</p>
+          </Card>
+          <Card 
+            className="glass-card p-6 hover:neon-glow-cyan transition-all cursor-pointer hover:scale-105"
+            onClick={() => window.location.href = '/stats'}
+          >
+            <h3 className="text-xl font-semibold mb-2">View Reports</h3>
+            <p className="text-muted-foreground text-sm">Analyze community metrics</p>
+          </Card>
+        </motion.div>
+      )}
     </div>
   );
 };

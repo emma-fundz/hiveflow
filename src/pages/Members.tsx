@@ -40,6 +40,9 @@ interface Member {
 const Members = () => {
   const { user } = useAuth();
   const workspaceId = (user as any)?.workspaceId ?? (user as any)?.id;
+  const userRole = (user as any)?.role as string | undefined;
+  const isOwner = !(user as any)?.workspaceId;
+  const isAdmin = userRole === 'Admin' || isOwner;
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -84,6 +87,7 @@ const Members = () => {
   const createMemberMutation = useMutation({
     mutationFn: async () => {
       if (!workspaceId) throw new Error('Not authenticated');
+      if (!isAdmin) throw new Error('Not authorized to add members');
       const now = new Date().toISOString();
       const tokenPayload = {
         email: newEmail,
@@ -242,6 +246,10 @@ const Members = () => {
 
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAdmin) {
+      toast.error('You do not have permission to add members');
+      return;
+    }
     if (!newName || !newEmail) {
       toast.error('Name and email are required');
       return;
@@ -250,6 +258,10 @@ const Members = () => {
   };
 
   const handleDeleteMember = (id: string) => {
+    if (!isAdmin) {
+      toast.error('You do not have permission to remove members');
+      return;
+    }
     deleteMemberMutation.mutate(id);
   };
 
@@ -262,18 +274,19 @@ const Members = () => {
           <p className="text-muted-foreground">Manage your community members</p>
         </div>
 
-        <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-gradient-to-r from-neon-cyan to-neon-indigo hover:opacity-90">
-              <UserPlus className="w-4 h-4 mr-2" />
-              Add Member
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="glass-card">
-            <DialogHeader>
-              <DialogTitle>Add New Member</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleAddMember} className="space-y-4">
+        {isAdmin && (
+          <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-gradient-to-r from-neon-cyan to-neon-indigo hover:opacity-90">
+                <UserPlus className="w-4 h-4 mr-2" />
+                Add Member
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="glass-card">
+              <DialogHeader>
+                <DialogTitle>Add New Member</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleAddMember} className="space-y-4">
               <div className="space-y-2">
                 <Label>Name</Label>
                 <Input
@@ -314,12 +327,13 @@ const Members = () => {
                   <option value="Admin">Admin</option>
                 </select>
               </div>
-              <Button type="submit" className="w-full bg-gradient-to-r from-neon-cyan to-neon-indigo">
-                Add Member
-              </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+                <Button type="submit" className="w-full bg-gradient-to-r from-neon-cyan to-neon-indigo">
+                  Add Member
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       {/* Search Bar */}

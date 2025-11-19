@@ -41,6 +41,9 @@ const Announcements = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const workspaceId = (user as any)?.workspaceId ?? (user as any)?.id;
+  const userRole = (user as any)?.role as string | undefined;
+  const isOwner = !(user as any)?.workspaceId;
+  const isAdmin = userRole === 'Admin' || isOwner;
   const [newAnnouncement, setNewAnnouncement] = useState('');
   
   const draftKey = `announcement-draft-${user?.id || 'guest'}`;
@@ -166,6 +169,10 @@ const Announcements = () => {
   }, [newAnnouncement]);
 
   const handlePost = async () => {
+    if (!isAdmin) {
+      toast.error('You do not have permission to post announcements');
+      return;
+    }
     if (!newAnnouncement.trim()) {
       toast.error('Please write something');
       return;
@@ -191,41 +198,43 @@ const Announcements = () => {
         <p className="text-muted-foreground">Stay updated with community news</p>
       </div>
 
-      {/* New Announcement Card */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
-        <Card className="glass-card p-6">
-          <div className="flex items-start space-x-4">
-            <Avatar className="w-12 h-12 ring-2 ring-primary">
-              <AvatarImage src={(user as any)?.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=You'} />
-              <AvatarFallback>Y</AvatarFallback>
-            </Avatar>
-            <div className="flex-1 space-y-4">
-              <Textarea
-                placeholder="What's on your mind? Share with the community..."
-                value={newAnnouncement}
-                onChange={(e) => setNewAnnouncement(e.target.value)}
-                rows={4}
-                className="resize-none"
-              />
-              <div className="flex justify-between items-center">
-                <p className="text-xs text-muted-foreground">
-                  💡 Tip: Cmd/Ctrl+S to save • Cmd/Ctrl+Enter to publish
-                </p>
-                <Button
-                  onClick={handlePost}
-                  className="bg-gradient-to-r from-neon-cyan to-neon-indigo hover:opacity-90"
-                >
-                  <Megaphone className="w-4 h-4 mr-2" />
-                  Post Announcement
-                </Button>
+      {/* New Announcement Card (Admins only) */}
+      {isAdmin && (
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <Card className="glass-card p-6">
+            <div className="flex items-start space-x-4">
+              <Avatar className="w-12 h-12 ring-2 ring-primary">
+                <AvatarImage src={(user as any)?.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=You'} />
+                <AvatarFallback>Y</AvatarFallback>
+              </Avatar>
+              <div className="flex-1 space-y-4">
+                <Textarea
+                  placeholder="What's on your mind? Share with the community..."
+                  value={newAnnouncement}
+                  onChange={(e) => setNewAnnouncement(e.target.value)}
+                  rows={4}
+                  className="resize-none"
+                />
+                <div className="flex justify-between items-center">
+                  <p className="text-xs text-muted-foreground">
+                    💡 Tip: Cmd/Ctrl+S to save • Cmd/Ctrl+Enter to publish
+                  </p>
+                  <Button
+                    onClick={handlePost}
+                    className="bg-gradient-to-r from-neon-cyan to-neon-indigo hover:opacity-90"
+                  >
+                    <Megaphone className="w-4 h-4 mr-2" />
+                    Post Announcement
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
-        </Card>
-      </motion.div>
+          </Card>
+        </motion.div>
+      )}
 
       {/* Announcements Feed */}
       {isLoading && (

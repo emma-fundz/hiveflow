@@ -42,6 +42,9 @@ interface Event {
 const Events = () => {
   const { user } = useAuth();
   const workspaceId = (user as any)?.workspaceId ?? (user as any)?.id;
+  const userRole = (user as any)?.role as string | undefined;
+  const isOwner = !(user as any)?.workspaceId;
+  const isAdmin = userRole === 'Admin' || isOwner;
   const queryClient = useQueryClient();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [filter, setFilter] = useState<'all' | 'upcoming' | 'past'>('upcoming');
@@ -96,6 +99,7 @@ const Events = () => {
   const createEventMutation = useMutation({
     mutationFn: async () => {
       if (!workspaceId) throw new Error('Not authenticated');
+      if (!isAdmin) throw new Error('Not authorized to create events');
       const data: EventData = {
         title,
         description,
@@ -155,6 +159,10 @@ const Events = () => {
 
   const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAdmin) {
+      toast.error('You do not have permission to create events');
+      return;
+    }
     await createEventMutation.mutateAsync();
   };
 
@@ -187,18 +195,19 @@ const Events = () => {
           <p className="text-muted-foreground">Discover and manage community events</p>
         </div>
 
-        <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-gradient-to-r from-neon-cyan to-neon-indigo hover:opacity-90">
-              <Plus className="w-4 h-4 mr-2" />
-              Create Event
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="glass-card max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Create New Event</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleCreateEvent} className="space-y-4">
+        {isAdmin && (
+          <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-gradient-to-r from-neon-cyan to-neon-indigo hover:opacity-90">
+                <Plus className="w-4 h-4 mr-2" />
+                Create Event
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="glass-card max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Create New Event</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleCreateEvent} className="space-y-4">
               <div className="space-y-2">
                 <Label>Event Title</Label>
                 <Input
@@ -257,12 +266,13 @@ const Events = () => {
                   onChange={(e) => setMaxAttendees(e.target.value)}
                 />
               </div>
-              <Button type="submit" className="w-full bg-gradient-to-r from-neon-cyan to-neon-indigo">
-                Create Event
-              </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+                <Button type="submit" className="w-full bg-gradient-to-r from-neon-cyan to-neon-indigo">
+                  Create Event
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       {/* Filter Tabs */}
