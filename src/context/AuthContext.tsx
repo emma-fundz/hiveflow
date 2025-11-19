@@ -22,12 +22,78 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
+  const buildUserWithWorkspace = async () => {
+    const rawUser = (db as any).user ?? null;
+    if (!rawUser) return null;
+
+    const authUserId = (rawUser as any).id;
+    const email = (rawUser as any).email as string | undefined;
+
+    try {
+      let memberDocs: any[] = [];
+
+      // Prefer matching by authUserId if present
+      if (authUserId) {
+        try {
+          memberDocs = await db.listDocuments("members", {
+            filters: { authUserId },
+            sort: "created_at",
+            order: "desc",
+          });
+        } catch (err) {
+          console.warn("AUTH WORKSPACE LOOKUP BY AUTH USER ID FAILED", err);
+        }
+      }
+
+      // Fallback: match by email
+      if ((!memberDocs || memberDocs.length === 0) && email) {
+        try {
+          memberDocs = await db.listDocuments("members", {
+            filters: { email },
+            sort: "created_at",
+            order: "desc",
+          });
+        } catch (err) {
+          console.warn("AUTH WORKSPACE LOOKUP BY EMAIL FAILED", err);
+        }
+      }
+
+      if (!memberDocs || memberDocs.length === 0) {
+        // No member record yet – treat this user as the owner of their own workspace
+        return {
+          ...rawUser,
+          workspaceId: authUserId,
+          role: (rawUser as any).role ?? "Admin",
+        };
+      }
+
+      const member = memberDocs[0];
+      const data = (member as any).data || {};
+      const workspaceId = data.ownerId || authUserId;
+      const role = data.role || (rawUser as any).role || "Member";
+
+      return {
+        ...rawUser,
+        workspaceId,
+        role,
+      };
+    } catch (err) {
+      console.warn("AUTH WORKSPACE ENRICH ERROR", err);
+      return rawUser;
+    }
+  };
+
   // Restore session
   useEffect(() => {
     (async () => {
       try {
         const ok = await db.isAuthenticated();
-        if (ok) setUser((db as any).user ?? null);
+        if (ok) {
+          const enriched = await buildUserWithWorkspace();
+          setUser(enriched);
+        } else {
+          setUser(null);
+        }
       } catch (err) {
         console.warn("Auth restore failed", err);
       }
@@ -45,7 +111,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       await db.register(email, password, { name, ...(extra || {}) });
       const ok = await db.isAuthenticated();
       if (!ok) throw new Error("Registration failed");
-      setUser((db as any).user ?? null);
+      const enriched = await buildUserWithWorkspace();
+      setUser(enriched);
     } catch (err) {
       console.log("COCOBASE REGISTER ERROR:", err);
       throw err;
@@ -57,7 +124,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       await db.login(email, password);
       const ok = await db.isAuthenticated();
       if (!ok) throw new Error("Login failed");
-      setUser((db as any).user ?? null);
+      const enriched = await buildUserWithWorkspace();
+      setUser(enriched);
     } catch (err) {
       console.log("COCOBASE LOGIN ERROR:", err);
       throw err;
@@ -68,7 +136,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     await (db as any).auth.loginWithGoogle(token);
     const ok = await db.isAuthenticated();
     if (!ok) throw new Error("Google login failed");
-    setUser((db as any).user ?? null);
+    const enriched = await buildUserWithWorkspace();
+    setUser(enriched);
   };
 
   const logout = async () => {

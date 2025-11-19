@@ -4,6 +4,7 @@ import { Card } from '@/components/ui/card';
 import { useAuth } from '@/context/AuthContext';
 import db from '@/lib/cocobase';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -11,6 +12,7 @@ const Dashboard = () => {
   const userRole = (user as any)?.role as string | undefined;
   const isOwner = !(user as any)?.workspaceId;
   const isAdmin = userRole === 'Admin' || isOwner;
+  const navigate = useNavigate();
   const { data: memberDocs = [] } = useQuery({
     queryKey: ['dashboard-members', workspaceId],
     queryFn: async () => {
@@ -305,21 +307,21 @@ const Dashboard = () => {
         >
           <Card 
             className="glass-card p-6 hover:neon-glow-cyan transition-all cursor-pointer hover:scale-105"
-            onClick={() => window.location.href = '/events'}
+            onClick={() => navigate('/events')}
           >
             <h3 className="text-xl font-semibold mb-2">Create Event</h3>
             <p className="text-muted-foreground text-sm">Plan your next community gathering</p>
           </Card>
           <Card 
             className="glass-card p-6 hover:neon-glow-cyan transition-all cursor-pointer hover:scale-105"
-            onClick={() => window.location.href = '/announcements'}
+            onClick={() => navigate('/announcements')}
           >
             <h3 className="text-xl font-semibold mb-2">Send Announcement</h3>
             <p className="text-muted-foreground text-sm">Keep everyone in the loop</p>
           </Card>
           <Card 
             className="glass-card p-6 hover:neon-glow-cyan transition-all cursor-pointer hover:scale-105"
-            onClick={() => window.location.href = '/stats'}
+            onClick={() => navigate('/stats')}
           >
             <h3 className="text-xl font-semibold mb-2">View Reports</h3>
             <p className="text-muted-foreground text-sm">Analyze community metrics</p>

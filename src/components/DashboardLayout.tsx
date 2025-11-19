@@ -5,14 +5,22 @@ import { Sidebar } from './Sidebar';
 import { useAuth } from '@/context/AuthContext';
 
 export const DashboardLayout = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!loading && !isAuthenticated) {
       navigate('/login');
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, loading, navigate]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-muted-foreground">Loading your workspace...</div>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return null;

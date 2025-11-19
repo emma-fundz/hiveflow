@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import { GoogleLogin } from '@react-oauth/google';
+import db from '@/lib/cocobase';
 
 
 const Register = () => {
@@ -17,6 +18,7 @@ const Register = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [adminTitle, setAdminTitle] = useState('');
 
   const { register, user, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
@@ -36,6 +38,32 @@ const Register = () => {
     setLoading(true);
     try {
       await register(name, email, password, { role: 'Admin' });
+
+      try {
+        const rawUser = (db as any).user as any;
+        const authUserId = rawUser?.id as string | undefined;
+        const now = new Date().toISOString();
+
+        if (authUserId) {
+          await db.createDocument('members', {
+            name,
+            email,
+            phone: '',
+            role: 'Admin',
+            displayRole: adminTitle || 'Admin',
+            status: 'active',
+            joinedAt: now,
+            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(
+              name || email || 'Admin',
+            )}`,
+            ownerId: authUserId,
+            authUserId,
+          });
+        }
+      } catch (err) {
+        console.log('OWNER MEMBER CREATION ERROR:', err);
+      }
+
       toast.success('Account created successfully');
       navigate('/dashboard');
     } catch (err) {
@@ -98,6 +126,17 @@ const Register = () => {
                 required
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="adminTitle">Your public title (what members see)</Label>
+            <Input
+              id="adminTitle"
+              type="text"
+              placeholder="e.g. CEO of Skill Stream Technology"
+              value={adminTitle}
+              onChange={(e) => setAdminTitle(e.target.value)}
+            />
           </div>
 
           <div className="space-y-2">

@@ -22,8 +22,10 @@ interface MemberData {
   role: string;
   joinedAt: string;
   avatar: string;
-  status: 'active' | 'inactive';
+  status: 'active' | 'inactive' | 'invited';
   ownerId: string;
+  authUserId?: string;
+  displayRole?: string;
 }
 
 interface Member {
@@ -34,7 +36,7 @@ interface Member {
   role: string;
   joinedDate: string;
   avatar: string;
-  status: 'active' | 'inactive';
+  status: 'active' | 'inactive' | 'invited';
 }
 
 const Members = () => {
@@ -69,20 +71,26 @@ const Members = () => {
     enabled: !!workspaceId,
   });
 
-  const members: Member[] = memberDocs.map((doc: any) => ({
-    id: doc.id,
-    name: doc.data?.name,
-    email: doc.data?.email,
-    phone: doc.data?.phone ?? '',
-    role: doc.data?.role ?? 'Member',
-    joinedDate: doc.data?.joinedAt ?? doc.created_at,
-    avatar:
-      doc.data?.avatar ||
-      `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(
-        doc.data?.name || doc.data?.email || 'Member',
-      )}`,
-    status: (doc.data?.status as 'active' | 'inactive') ?? 'active',
-  }));
+  const members: Member[] = memberDocs.map((doc: any) => {
+    const data = doc.data || {};
+    const isOwnerMember = data.authUserId && data.authUserId === workspaceId;
+    const displayName = data.name || data.email || 'Member';
+
+    return {
+      id: doc.id,
+      name: displayName,
+      email: isOwnerMember ? '' : data.email,
+      phone: isOwnerMember ? '' : (data.phone ?? ''),
+      role: data.displayRole || data.role || 'Member',
+      joinedDate: data.joinedAt ?? doc.created_at,
+      avatar:
+        data.avatar ||
+        `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(
+          displayName,
+        )}`,
+      status: (data.status as 'active' | 'inactive' | 'invited') ?? 'active',
+    };
+  });
 
   const createMemberMutation = useMutation({
     mutationFn: async () => {
@@ -109,7 +117,7 @@ const Members = () => {
         email: newEmail,
         phone: newPhone,
         role: newRole,
-        status: 'active',
+        status: 'invited',
         joinedAt: now,
         avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(
           newName || newEmail || 'Member',
@@ -230,7 +238,7 @@ const Members = () => {
       await db.deleteDocument('members', id);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['members', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['members', workspaceId] });
       toast.success('Member removed');
     },
     onError: (err: any) => {
@@ -407,8 +415,20 @@ const Members = () => {
                 </td>
                 <td className="py-4 px-4">
                   <Badge
-                    variant={member.status === 'active' ? 'default' : 'secondary'}
-                    className={member.status === 'active' ? 'bg-green-500/20 text-green-500' : ''}
+                    variant={
+                      member.status === 'active'
+                        ? 'default'
+                        : member.status === 'invited'
+                        ? 'secondary'
+                        : 'outline'
+                    }
+                    className={
+                      member.status === 'active'
+                        ? 'bg-green-500/20 text-green-500'
+                        : member.status === 'invited'
+                        ? 'bg-yellow-500/10 text-yellow-400'
+                        : ''
+                    }
                   >
                     {member.status}
                   </Badge>
