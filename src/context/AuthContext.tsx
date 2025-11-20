@@ -14,6 +14,7 @@ interface AuthContextProps {
   login: (email: string, password: string) => Promise<void>;
   loginWithGoogle: (token: string) => Promise<void>;
   logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextProps | undefined>(undefined);
@@ -72,8 +73,48 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const workspaceId = data.ownerId || authUserId;
       const role = data.role || (rawUser as any).role || "Member";
 
+      let profileName: string | undefined;
+      let profileAvatar: string | undefined;
+
+      if (typeof window !== "undefined" && authUserId) {
+        try {
+          const storedProfile = window.localStorage.getItem(
+            `hf_profile_${authUserId}`,
+          );
+          if (storedProfile) {
+            const parsedProfile = JSON.parse(storedProfile);
+            if (
+              typeof parsedProfile.name === "string" &&
+              parsedProfile.name.trim()
+            ) {
+              profileName = parsedProfile.name;
+            }
+            if (
+              typeof parsedProfile.avatar === "string" &&
+              parsedProfile.avatar.trim()
+            ) {
+              profileAvatar = parsedProfile.avatar;
+            }
+          }
+        } catch {
+        }
+      }
+
+      const displayName =
+        profileName ||
+        (data.name as string | undefined) ||
+        ((rawUser as any).name as string | undefined) ||
+        email ||
+        "Member";
+      const avatar =
+        profileAvatar ||
+        (data.avatar as string | undefined) ||
+        ((rawUser as any).avatar as string | undefined);
+
       return {
         ...rawUser,
+        name: displayName,
+        avatar,
         workspaceId,
         role,
       };
@@ -87,6 +128,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     (async () => {
       try {
+        let parsed: any | null = null;
         const stored =
           typeof window !== "undefined"
             ? window.localStorage.getItem("hf_auth_user")
@@ -94,10 +136,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
         if (stored) {
           try {
-            const parsed = JSON.parse(stored);
+            parsed = JSON.parse(stored);
             setUser(parsed);
-            setLoading(false);
-            return;
           } catch {
             // ignore parse errors and fall through to live check
           }
@@ -110,7 +150,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           if (typeof window !== "undefined") {
             window.localStorage.setItem("hf_auth_user", JSON.stringify(enriched));
           }
-        } else {
+        } else if (!parsed) {
+          // No valid stored user and no Cocobase session – ensure logged out
           setUser(null);
           if (typeof window !== "undefined") {
             window.localStorage.removeItem("hf_auth_user");
@@ -185,6 +226,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const refreshUser = async () => {
+    try {
+      const ok = await db.isAuthenticated();
+      if (!ok) return;
+      const enriched = await buildUserWithWorkspace();
+      setUser(enriched);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("hf_auth_user", JSON.stringify(enriched));
+      }
+    } catch (err) {
+      console.warn("AUTH REFRESH ERROR", err);
+    }
+  };
+
   const logout = async () => {
     await db.logout();
     setUser(null);
@@ -203,6 +258,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         login,
         loginWithGoogle,
         logout,
+        refreshUser,
       }}
     >
       {children}

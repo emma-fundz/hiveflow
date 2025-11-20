@@ -12,6 +12,16 @@ import { useDrafts } from '@/hooks/useDrafts';
 import { useAuth } from '@/context/AuthContext';
 import db from '@/lib/cocobase';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { sendNotificationEmail } from '@/lib/cocomailer';
+
+const APP_BASE_URL = import.meta.env.VITE_APP_BASE_URL as string | undefined;
+
+interface AnnouncementComment {
+  authorName: string;
+  authorAvatar?: string;
+  content: string;
+  createdAt: string;
+}
 
 interface AnnouncementData {
   authorName: string;
@@ -24,6 +34,7 @@ interface AnnouncementData {
   isLiked: boolean;
   ownerId: string;
   imageUrl?: string;
+  commentsList?: AnnouncementComment[];
 }
 
 interface Announcement {
@@ -35,9 +46,12 @@ interface Announcement {
   };
   content: string;
   timestamp: string;
+   rawCreatedAt?: string;
   likes: number;
   comments: number;
   isLiked: boolean;
+  commentsList: AnnouncementComment[];
+  imageUrl?: string;
 }
 
 const Announcements = () => {
@@ -49,12 +63,69 @@ const Announcements = () => {
   const isAdmin = userRole === 'Admin' || isOwner;
   const [newAnnouncement, setNewAnnouncement] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   
   const draftKey = `announcement-draft-${user?.id || 'guest'}`;
   const { loadDraft, clearDraft, forceSave } = useDrafts({
     key: draftKey,
     value: newAnnouncement,
     delay: 5000,
+  });
+
+  const commentMutation = useMutation({
+    mutationFn: async (payload: {
+      id: string;
+      content: string;
+      existingComments: AnnouncementComment[];
+    }) => {
+      if (!workspaceId) throw new Error('Not authenticated');
+      if (!user) throw new Error('Not authenticated');
+      const trimmed = payload.content.trim();
+      if (!trimmed) throw new Error('Comment is empty');
+
+      const now = new Date().toISOString();
+      const authorName =
+        (user as any)?.name ||
+        (user as any)?.email ||
+        'Member';
+      const authorAvatar = (user as any)?.avatar as string | undefined;
+
+      const nextList: AnnouncementComment[] = [
+        ...payload.existingComments,
+        {
+          authorName,
+          authorAvatar,
+          content: trimmed,
+          createdAt: now,
+        },
+      ];
+
+      await db.updateDocument<AnnouncementData>('announcements', payload.id, {
+        commentsList: nextList,
+        comments: nextList.length,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['announcements', workspaceId] });
+    },
+    onError: (err: any) => {
+      console.log('COCOBASE ANNOUNCEMENTS COMMENT ERROR:', err);
+      toast.error('Failed to add comment');
+    },
+  });
+
+  const deleteAnnouncementMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await db.deleteDocument('announcements', id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['announcements', workspaceId] });
+      toast.success('Announcement deleted');
+    },
+    onError: (err: any) => {
+      console.log('COCOBASE ANNOUNCEMENTS DELETE ERROR:', err);
+      toast.error('Failed to delete announcement');
+    },
   });
 
   const {
@@ -75,23 +146,39 @@ const Announcements = () => {
     enabled: !!workspaceId,
   });
 
-  const announcements: Announcement[] = announcementDocs.map((doc: any) => ({
-    id: doc.id,
-    author: {
-      name: doc.data?.authorName,
-      avatar:
-        doc.data?.authorAvatar ||
-        'https://api.dicebear.com/7.x/avataaars/svg?seed=You',
-      role: doc.data?.authorRole ?? 'Admin',
-    },
-    content: doc.data?.content,
-    timestamp: doc.data?.createdAt
-      ? new Date(doc.data.createdAt).toLocaleString()
-      : '',
-    likes: doc.data?.likes ?? 0,
-    comments: doc.data?.comments ?? 0,
-    isLiked: !!doc.data?.isLiked,
-  }));
+  const announcements: Announcement[] = announcementDocs.map((doc: any) => {
+    const authorName = doc.data?.authorName || 'You';
+    const isCurrentUserAuthor =
+      !!user &&
+      (authorName === (user as any)?.name || authorName === user?.email);
+
+    return {
+      id: doc.id,
+      author: {
+        name: authorName,
+        avatar:
+          (isCurrentUserAuthor && (user as any)?.avatar) ||
+          doc.data?.authorAvatar ||
+          'https://api.dicebear.com/7.x/avataaars/svg?seed=You',
+        role: doc.data?.authorRole ?? 'Admin',
+      },
+      content: doc.data?.content,
+      timestamp: doc.data?.createdAt
+        ? new Date(doc.data.createdAt).toLocaleString()
+        : '',
+      rawCreatedAt: doc.data?.createdAt,
+      likes: doc.data?.likes ?? 0,
+      comments:
+        (Array.isArray(doc.data?.commentsList)
+          ? (doc.data.commentsList as AnnouncementComment[]).length
+          : doc.data?.comments) ?? 0,
+      isLiked: !!doc.data?.isLiked,
+      commentsList: (Array.isArray(doc.data?.commentsList)
+        ? (doc.data.commentsList as AnnouncementComment[])
+        : []) as AnnouncementComment[],
+      imageUrl: doc.data?.imageUrl,
+    };
+  });
 
   const createAnnouncementMutation = useMutation({
     mutationFn: async () => {
@@ -113,11 +200,61 @@ const Announcements = () => {
       };
       return db.createDocument<AnnouncementData>('announcements', data);
     },
-    onSuccess: () => {
+    onSuccess: async (doc: any) => {
       queryClient.invalidateQueries({ queryKey: ['announcements', workspaceId] });
       setNewAnnouncement('');
       clearDraft();
       setImageUrl('');
+
+      const baseUrl = APP_BASE_URL || window.location.origin;
+
+      // Create a simple workspace-scoped notification document
+      try {
+        if (workspaceId) {
+          const now = new Date().toISOString();
+          await db.createDocument('notifications', {
+            ownerId: workspaceId,
+            type: 'announcement',
+            title: doc?.data?.authorName || 'New announcement',
+            body: doc?.data?.content || '',
+            url: '/announcements',
+            createdAt: now,
+          });
+        }
+      } catch (err) {
+        console.log('ANNOUNCEMENT NOTIFICATION DOC ERROR:', err);
+      }
+
+      // Email all workspace members about the new announcement
+      try {
+        if (workspaceId) {
+          const members: any[] = await db.listDocuments('members', {
+            filters: { ownerId: workspaceId },
+          });
+          const recipients = members
+            .map((m) => (m as any).data?.email as string | undefined)
+            .filter(Boolean) as string[];
+
+          if (recipients.length) {
+            const rawContent = (doc?.data?.content as string | undefined) || '';
+            const preview = rawContent.length > 160
+              ? `${rawContent.slice(0, 157)}...`
+              : rawContent;
+
+            await sendNotificationEmail({
+              recipients,
+              subject: `New announcement from ${(user as any)?.name || 'your community'}`,
+              title: 'New community announcement',
+              body: preview,
+              ctaLabel: 'View announcement',
+              ctaUrl: `${baseUrl}/announcements`,
+            });
+          }
+        }
+      } catch (err) {
+        console.log('ANNOUNCEMENT EMAIL NOTIFY ERROR:', err);
+      }
+
       toast.success('Announcement posted!');
     },
     onError: (err: any) => {
@@ -196,8 +333,82 @@ const Announcements = () => {
     });
   };
 
+  const handleDeleteAnnouncement = (id: string) => {
+    if (!isAdmin) {
+      toast.error('You do not have permission to delete announcements');
+      return;
+    }
+    const confirmed = window.confirm(
+      'Are you sure you want to delete this announcement? This action cannot be undone.',
+    );
+    if (!confirmed) return;
+    deleteAnnouncementMutation.mutate(id);
+  };
+
+  const handleCommentSubmit = async (announcement: Announcement) => {
+    const text = commentDrafts[announcement.id]?.trim() || '';
+    if (!text) {
+      toast.error('Please write a comment');
+      return;
+    }
+
+    try {
+      await commentMutation.mutateAsync({
+        id: announcement.id,
+        content: text,
+        existingComments: announcement.commentsList || [],
+      });
+      setCommentDrafts((prev) => ({
+        ...prev,
+        [announcement.id]: '',
+      }));
+    } catch {
+      // error is handled in mutation onError
+    }
+  };
+
+  const handleShare = async (announcement: Announcement) => {
+    try {
+      const baseUrl = APP_BASE_URL || window.location.origin;
+      const payload = {
+        content: announcement.content,
+        authorName: announcement.author.name,
+        authorRole: announcement.author.role,
+        createdAt: announcement.rawCreatedAt || '',
+        imageUrl: announcement.imageUrl || '',
+      };
+
+      let token: string;
+      try {
+        token = window.btoa(JSON.stringify(payload));
+      } catch (err) {
+        console.log('ANNOUNCEMENT SHARE ENCODE ERROR:', err);
+        toast.error('Failed to generate share link');
+        return;
+      }
+
+      const url = `${baseUrl}/announcement/${encodeURIComponent(token)}`;
+
+      if ((navigator as any).share) {
+        await (navigator as any).share({
+          title: `Announcement from ${announcement.author.name}`,
+          text: announcement.content,
+          url,
+        });
+      } else if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(url);
+        toast.success('Share link copied to clipboard');
+      } else {
+        toast.info(url);
+      }
+    } catch (err) {
+      console.log('ANNOUNCEMENT SHARE ERROR:', err);
+      toast.error('Failed to share announcement');
+    }
+  };
+
   return (
-    <div className="space-y-8 max-w-4xl mx-auto">
+    <div className="space-y-8 max-w-4xl mx-auto px-2 sm:px-0">
       {/* Header */}
       <div>
         <h1 className="text-4xl font-bold mb-2">Announcements</h1>
@@ -210,13 +421,13 @@ const Announcements = () => {
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
         >
-          <Card className="glass-card p-6">
-            <div className="flex items-start space-x-4">
+          <Card className="glass-card p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-start gap-4">
               <Avatar className="w-12 h-12 ring-2 ring-primary">
                 <AvatarImage src={(user as any)?.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=You'} />
                 <AvatarFallback>Y</AvatarFallback>
               </Avatar>
-              <div className="flex-1 space-y-4">
+              <div className="flex-1 space-y-4 w-full">
                 <Textarea
                   placeholder="What's on your mind? Share with the community..."
                   value={newAnnouncement}
@@ -232,7 +443,7 @@ const Announcements = () => {
                     onChange={(e) => setImageUrl(e.target.value)}
                   />
                 </div>
-                <div className="flex justify-between items-center">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                   <p className="text-xs text-muted-foreground">
                     💡 Tip: Cmd/Ctrl+S to save • Cmd/Ctrl+Enter to publish
                   </p>
@@ -300,18 +511,97 @@ const Announcements = () => {
                   <span>{announcement.likes}</span>
                 </button>
 
-                <button className="flex items-center space-x-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const el = document.getElementById(`comment-input-${announcement.id}`);
+                    if (el) {
+                      (el as HTMLInputElement).focus();
+                    }
+                  }}
+                  className="flex items-center space-x-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
                   <MessageCircle className="w-4 h-4" />
                   <span>{announcement.comments}</span>
                 </button>
 
                 <button
-                  onClick={() => toast.info('Share feature coming soon!')}
+                  onClick={() => handleShare(announcement)}
                   className="flex items-center space-x-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >
                   <Share2 className="w-4 h-4" />
                   <span>Share</span>
                 </button>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteAnnouncement(announcement.id)}
+                    className="ml-auto text-xs text-destructive hover:underline"
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
+
+              {/* Comments */}
+              <div className="mt-4 space-y-3">
+                {announcement.commentsList.length > 0 && (
+                  <div className="space-y-2 text-sm text-muted-foreground max-h-40 overflow-y-auto">
+                    {announcement.commentsList.map((comment, idx) => (
+                      <div key={idx} className="flex items-start space-x-2">
+                        <Avatar className="w-7 h-7">
+                          <AvatarImage src={comment.authorAvatar} />
+                          <AvatarFallback>
+                            {comment.authorName?.[0] || 'M'}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="text-xs font-medium text-foreground">
+                            {comment.authorName}{' '}
+                            <span className="text-[10px] text-muted-foreground">
+                              {comment.createdAt
+                                ? new Date(comment.createdAt).toLocaleString()
+                                : ''}
+                            </span>
+                          </p>
+                          <p className="text-xs text-muted-foreground whitespace-pre-wrap">
+                            {comment.content}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {user && (
+                  <form
+                    className="flex items-center space-x-2"
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      await handleCommentSubmit(announcement);
+                    }}
+                  >
+                    <Input
+                      id={`comment-input-${announcement.id}`}
+                      placeholder="Write a comment..."
+                      value={commentDrafts[announcement.id] || ''}
+                      onChange={(e) =>
+                        setCommentDrafts((prev) => ({
+                          ...prev,
+                          [announcement.id]: e.target.value,
+                        }))
+                      }
+                    />
+                    <Button
+                      type="submit"
+                      size="sm"
+                      className="bg-gradient-to-r from-neon-cyan to-neon-indigo hover:opacity-90"
+                      disabled={commentMutation.isPending}
+                    >
+                      Comment
+                    </Button>
+                  </form>
+                )}
               </div>
             </Card>
           </motion.div>

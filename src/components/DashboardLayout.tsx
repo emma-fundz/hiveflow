@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { useNavigate, Outlet } from 'react-router-dom';
+import { useEffect, useRef } from 'react';
+import { useNavigate, Outlet, useLocation } from 'react-router-dom';
 import { Navbar } from './Navbar';
 import { Sidebar } from './Sidebar';
 import { useAuth } from '@/context/AuthContext';
@@ -7,12 +7,27 @@ import { useAuth } from '@/context/AuthContext';
 export const DashboardLayout = () => {
   const { isAuthenticated, loading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const hasHandledInitial = useRef(false);
 
   useEffect(() => {
-    if (!loading && !isAuthenticated) {
+    if (loading) return;
+
+    if (!isAuthenticated) {
       navigate('/login');
+      return;
     }
-  }, [isAuthenticated, loading, navigate]);
+
+    if (hasHandledInitial.current) return;
+    hasHandledInitial.current = true;
+
+    if (location.pathname === '/splash') {
+      return;
+    }
+
+    const nextPath = `${location.pathname}${location.search}${location.hash}`;
+    navigate('/splash', { state: { next: nextPath } });
+  }, [isAuthenticated, loading, navigate, location]);
 
   if (loading) {
     return (

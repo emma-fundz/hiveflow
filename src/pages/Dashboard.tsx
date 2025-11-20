@@ -199,13 +199,18 @@ const Dashboard = () => {
     const latest = sorted[0];
     const authorName = latest.data?.authorName || 'You';
     const ts = latest.data?.createdAt ?? latest.created_at;
+    const authorAvatarFromDoc = latest.data?.authorAvatar as string | undefined;
+    const isCurrentUserAuthor =
+      !!user &&
+      (authorName === user.name || authorName === user.email);
     activities.push({
       id: latest.id,
       title: authorName,
       description: 'posted a new announcement',
       timeLabel: formatRelativeTime(ts),
       avatar:
-        latest.data?.authorAvatar ||
+        (isCurrentUserAuthor && (user as any)?.avatar) ||
+        authorAvatarFromDoc ||
         'https://api.dicebear.com/7.x/avataaars/svg?seed=You',
       timestamp: ts ? new Date(ts).getTime() : 0,
     });

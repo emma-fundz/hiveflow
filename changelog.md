@@ -645,4 +645,215 @@ This changelog tracks all significant changes to the ClubManager platform. Each 
 - `src/pages/Settings.tsx`
 - `changelog.md` (this entry)
 
+---
+
+## 2025-11-19 14:30:00
+
+### 🎨 Mobile members layout, profile avatars, HiveFlow branding & splash screen
+
+**Overview:**
+- Improved the mobile experience on the Members and Announcements pages.
+- Enhanced the Settings page so profile name, bio, and avatar are persisted to Cocobase (and cached in localStorage).
+- Rebranded the app UI from "ClubManager" to **HiveFlow** using the provided logo image.
+- Added an animated splash screen that appears right after login/register/invite-accept before redirecting to the dashboard.
+
+**Members Page Mobile Layout (`src/pages/Members.tsx`):**
+- Kept the existing members **table** for desktop users but hid it on small screens with `hidden md:block`.
+- Added a **mobile-first card list** (`md:hidden`) so each member appears as a compact glassmorphic card:
+  - Shows avatar, name, role, email/phone (when not hidden for the owner), status badge, and joined date.
+  - Preserves the existing `isAdmin`-only manage/remove actions.
+- Removed the need for horizontal scrolling on phones while preserving feature parity with the desktop table.
+
+**Announcements Mobile Spacing (`src/pages/Announcements.tsx`):**
+- Wrapped the main content in `px-2 sm:px-0` to give announcements better side padding on small screens while leaving desktop spacing unchanged.
+
+**Settings Profile & Avatar Persistence (`src/pages/Settings.tsx`):**
+- Extended the profile section to support **real avatar upload** and persistence:
+  - Added a hidden `<input type="file" accept="image/*">` triggered by the `Change Photo` button.
+  - Validates file size (max 5MB) and reads the selected image as a **data URL**, which is used as the avatar preview.
+- On mount, the Settings page now loads profile data from two sources:
+  - `localStorage` (`hf_profile_<userId>`) – restores `name`, `bio`, and `avatar` if previously saved.
+  - Cocobase `members` collection – looks up the current user by `ownerId = workspaceId or user.id` and `authUserId` (with a fallback lookup by `email`).
+  - Prefers the member document's `name`, `bio`, and `avatar` when available.
+- On **Save Changes**:
+  - If a matching member document is found, calls `db.updateDocument('members', memberId, { name, bio, avatar })`.
+  - Writes `{ name, bio, avatar }` back to `localStorage`.
+  - Shows a loading state (`Saving...`) while the update is in progress.
+- This ensures that profile info is consistent across Settings, Members, and sessions, even after refresh.
+
+**HiveFlow Logo & Branding (`src/components/Navbar.tsx`, `src/pages/Login.tsx`, `src/pages/Register.tsx`, `src/pages/AcceptInvite.tsx`):**
+- Updated the navbar brand from **ClubManager** to **HiveFlow**:
+  - Replaced the generic `Users` icon with a rounded gradient block containing `/logo.jpg`.
+  - Kept the neon cyan/indigo gradient text, now reading **HiveFlow**.
+- Updated the **Login** and **Register** headers:
+  - Replaced the `Users` icon with the same `/logo.jpg` block, creating a consistent brand moment on auth screens.
+- Updated the **Accept Invite** flow so that, after a successful invite acceptance, the user is sent to the new splash screen instead of directly to `/dashboard`.
+
+**Animated Splash Screen (`src/pages/Splash.tsx`, `src/App.tsx`, `tailwind.config.js`):**
+- Created a new `Splash` page with a glassmorphic card that:
+  - Displays the HiveFlow logo and a personalized welcome message like `Hey Alex, your workspace is getting ready...`.
+  - Shows an animated loading bar using a new Tailwind `loading-bar` keyframe.
+  - After ~2 seconds, automatically navigates the user to `/dashboard`.
+- Integrated `PrefsContext` so the splash honors the user's **reduced motion** preference:
+  - Uses toned-down Framer Motion animations when `prefersReducedMotion` is `true`.
+- Added a `loading-bar` keyframe and `animate-loading-bar` utility to `tailwind.config.js` and wired the progress bar to use it.
+- Updated routing in `src/App.tsx`:
+  - Added `const Splash = lazy(() => import('./pages/Splash'));`.
+  - Registered `/splash` as a **protected route** inside `DashboardLayout`, ensuring only authenticated users see it.
+- Updated `Login`, `Register`, and `AcceptInvite` to navigate to `/splash` after successful auth instead of going straight to `/dashboard`.
+
+**Files Modified / Created:**
+- `src/pages/Members.tsx` (mobile card layout)
+- `src/pages/Announcements.tsx` (mobile padding tweaks)
+- `src/pages/Settings.tsx` (avatar upload, profile persistence to Cocobase + localStorage)
+- `src/components/Navbar.tsx` (HiveFlow branding + logo integration)
+- `src/pages/Login.tsx` (logo header, redirect to splash)
+- `src/pages/Register.tsx` (logo header, redirect to splash)
+- `src/pages/AcceptInvite.tsx` (redirect to splash)
+- `src/pages/Splash.tsx` (new animated splash screen)
+- `src/App.tsx` (protected `/splash` route registration)
+- `tailwind.config.js` (loading bar keyframes and animation)
+- `changelog.md` (this entry)
+
+---
+
+## 2025-11-19 15:05:00
+
+### 📆 Events RSVP fix & 💬 per-event chat
+
+**Overview:**
+- Tightened the Events page to use workspace-scoped cache keys for RSVPs.
+- Added a simple per-event chat feature backed by a new `event_chats` collection so members can discuss each event.
+
+**Events RSVP Cache Fix (`src/pages/Events.tsx`):**
+- Updated the RSVP mutation to invalidate the same workspace-scoped query key used for loading events:
+  - Before: `queryClient.invalidateQueries({ queryKey: ['events', user?.id] });`
+  - After:  `queryClient.invalidateQueries({ queryKey: ['events', workspaceId] });`
+- This ensures that when a user RSVPs or cancels, the events list is correctly refetched for the current workspace and stays in sync with Cocobase.
+
+**Per-Event Chat (`src/pages/Events.tsx`, `event_chats` collection):**
+- Introduced a lightweight chat thread per event so members can coordinate details and share updates.
+- Data model:
+  - New Cocobase collection: **`event_chats`**.
+  - Fields written by the frontend:
+    - `ownerId` (string) – workspace id (same as `events.ownerId`).
+    - `eventId` (string) – id of the event being discussed.
+    - `authorId` (string) – Cocobase user id of the sender.
+    - `authorName` (string) – display name of the sender.
+    - `message` (string) – chat message body.
+    - `createdAt` (string, ISO timestamp).
+- UI behavior on the Events page:
+  - Each event card now has two actions:
+    - **Open Chat** – opens a modal dialog for that event's discussion.
+    - **RSVP / Cancel RSVP** – existing behavior preserved.
+  - When **Open Chat** is clicked:
+    - A dialog appears showing a scrollable list of messages for that event.
+    - Messages are loaded via React Query using `db.listDocuments('event_chats', { filters: { ownerId: workspaceId, eventId }, sort: 'created_at', order: 'asc' })`.
+    - Chat auto-refreshes every few seconds while the dialog is open.
+    - Shows helpful states: loading, error, and an empty-state prompt when there are no messages yet.
+  - Sending a message:
+    - All authenticated workspace members can post messages.
+    - The form validates non-empty text and then calls `db.createDocument('event_chats', { ownerId, eventId, authorId, authorName, message, createdAt })`.
+    - On success, the input clears and the `['event-chats', workspaceId, eventId]` query is invalidated to refresh the thread.
+
+**Files Modified:**
+- `src/pages/Events.tsx` (RSVP cache key fix and per-event chat modal wired to `event_chats`)
+- `changelog.md` (this entry)
+
+
+## 2025-11-19 16:10:00
+
+### 👤 Avatar propagation hardening & 🗑️ admin delete for announcements/events
+
+**Overview:**
+- Tightened how profile avatars and names flow from Settings into the authenticated user object so that announcements consistently show the correct profile picture across devices.
+- Added admin-only delete actions for announcements and events so workspace owners/admins can clean up outdated content.
+
+**Avatar Propagation & Auth (`src/context/AuthContext.tsx`, `src/pages/Settings.tsx`):**
+- `AuthContext.buildUserWithWorkspace` now:
+  - Hydrates `name` and `avatar` from a per-user local profile cache `hf_profile_<userId>` when available.
+  - Falls back to the latest `members` document for that `authUserId` (or email) and then to the raw Cocobase user object.
+- Session restore was hardened so that even when a stored `hf_auth_user` exists, the app still verifies the Cocobase session and re-enriches the user via `buildUserWithWorkspace`, updating `hf_auth_user` with the freshest name/avatar/workspace metadata.
+- Settings profile save was updated to backfill missing member documents:
+  - If no `members` document exists yet for the current workspace/user, `handleSaveProfile` now creates one with `ownerId`, `authUserId`, `email`, `name`, `bio`, `avatar`, and `role`.
+  - This ensures that legacy workspace owners (who were created before the members-collection work) still get a Cocobase-backed avatar/name that can be read on other devices.
+  - Settings continues to write `{ name, bio, avatar }` to `hf_profile_<userId>` and calls `refreshUser()` so navbar, announcements, dashboard, and other pages see the updated profile immediately.
+
+**Announcements Avatar Usage & Admin Delete (`src/pages/Announcements.tsx`):**
+- Announcements now prefer the current user's avatar when determining the author avatar:
+  - When mapping Cocobase `announcements` documents into UI cards, the code checks whether `authorName` matches the current `user.name` or `user.email` and, if so, uses `user.avatar`.
+  - Falls back to the stored `authorAvatar` on the document and then to a generic generated avatar.
+- The admin composer card was tweaked for mobile:
+  - Uses `p-4 sm:p-6` and a `flex-col sm:flex-row` layout so avatar, textarea, and actions stack cleanly on phones.
+- Added an admin-only **Delete** action per announcement:
+  - Introduced a `deleteAnnouncementMutation` that calls `db.deleteDocument('announcements', id)` and invalidates `['announcements', workspaceId]`.
+  - Added a small "Delete" button to each announcement card for admins, with a confirmation dialog before delete.
+
+**Events Admin Delete & Chat Mutation (`src/pages/Events.tsx`):**
+- Added delete support for events, restricted to admins:
+  - New `deleteEventMutation` checks authentication and admin role, then calls `db.deleteDocument('events', id)` and invalidates the workspace-scoped events query.
+  - Each event card now shows a **Delete** button for admins alongside **Open Chat** and **RSVP**.
+  - Deletes prompt for confirmation and surface success/error via toasts.
+- Updated the per-event chat send-message button to use the correct React Query mutation state (`isPending`), preventing TypeScript errors while preserving the loading UX ("Sending...").
+
+**Files Modified:**
+- `src/context/AuthContext.tsx` (session re-enrichment + profile cache hydration)
+- `src/pages/Settings.tsx` (create missing members doc on profile save)
+- `src/pages/Announcements.tsx` (author avatar preference and admin delete button)
+- `src/pages/Events.tsx` (admin-only delete mutation and chat loading-state fix)
+- `changelog.md` (this entry)
+
+
+## 2025-11-19 16:30:00
+
+### ⏳ Splash screen timing & refresh behavior
+
+**Overview:**
+- Extended the HiveFlow splash screen to last for a full 5 seconds.
+- Ensured that after login/register or a page refresh on any authenticated route, users see the splash before being returned to their intended page.
+
+**Splash Behavior (`src/pages/Splash.tsx`):**
+- Updated the splash timer from 2 seconds to 5 seconds.
+- The Splash page now reads an optional `next` route from `location.state` and, after 5 seconds, navigates to that route (`navigate(next, { replace: true })`).
+- Defaults to redirecting to `/dashboard` when no `next` value is provided (e.g. from login/register flows).
+
+**Initial Authenticated Load Redirect (`src/components/DashboardLayout.tsx`):**
+- Enhanced `DashboardLayout` so that on the **first authenticated load** of any protected route (e.g. `/dashboard`, `/events`, `/announcements`, `/settings`), it:
+  - Skips the behavior entirely when the current route is `/splash`.
+  - Otherwise computes the current path + query/hash as `next`.
+  - Redirects to `/splash` with `state: { next }` so the Splash page can send the user back after 5 seconds.
+- Uses an internal `hasHandledInitial` ref to ensure this redirect only happens once per app mount, avoiding extra splash transitions during normal in-app navigation.
+
+**Resulting UX:**
+- After login, register, or accepting an invite, users land on `/splash` for 5 seconds and are then taken to their dashboard.
+- When a logged-in user refreshes the app on any dashboard route (e.g. `/events`), they see the 5-second splash first and are then returned to the same route.
+
+**Files Modified:**
+- `src/pages/Splash.tsx` (5-second timer and `next` route handling)
+- `src/components/DashboardLayout.tsx` (initial authenticated load redirect into Splash)
+- `changelog.md` (this entry)
+
+
+## 2025-11-19 16:40:00
+
+### 🔁 Auth persistence tweak for splash-on-refresh
+
+**Overview:**
+- Adjusted auth/session restore so that a previously stored `hf_auth_user` continues to be treated as authenticated across full page reloads, even if `db.isAuthenticated()` returns false, while still enriching from Cocobase when possible.
+
+**Details (`src/context/AuthContext.tsx`):**
+- On startup, `AuthProvider` now:
+  - Attempts to parse `hf_auth_user` from `localStorage` and immediately seeds the `user` state from it.
+  - Calls `db.isAuthenticated()`; if true, it rebuilds the enriched user via `buildUserWithWorkspace()` and overwrites both context and `hf_auth_user` with the fresh value.
+  - If `db.isAuthenticated()` is false **and there was no valid stored user**, it logs the user out and clears `hf_auth_user`.
+  - If a stored user exists but the Cocobase session is not active, it keeps the stored user instead of forcing a logout, preserving the in-app logged-in experience across refreshes.
+
+**Result:**
+- Combined with the new splash-on-refresh behavior in `DashboardLayout`, authenticated users now:
+  - Stay logged in when they hard-refresh on any dashboard route.
+  - See the 5-second HiveFlow splash first, and are then returned to the page they were on before the refresh.
+
+**Files Modified:**
+- `src/context/AuthContext.tsx` (relaxed restore logic around `hf_auth_user` and `db.isAuthenticated()`)
+- `changelog.md` (this entry)
 

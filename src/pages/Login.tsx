@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Mail, Lock, Eye, EyeOff, Users } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -29,7 +29,7 @@ const Login = () => {
     try {
       await login(email, password);
       toast.success('Welcome back!');
-      navigate('/dashboard');
+      navigate('/splash');
     } catch (err) {
       toast.error('Invalid credentials');
     } finally {
@@ -45,7 +45,7 @@ const Login = () => {
     try {
       await loginWithGoogle(token);
       toast.success("Logged in with Google");
-      navigate("/dashboard");
+      navigate("/splash");
     } catch (err) {
       console.log("COCOBASE ERROR:", err);
       toast.error("Google login failed");
@@ -67,8 +67,12 @@ const Login = () => {
         className="glass-card p-8 rounded-3xl w-full max-w-md relative z-10 mx-4"
       >
         <div className="flex items-center justify-center mb-8">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-neon-cyan to-neon-indigo flex items-center justify-center">
-            <Users className="w-8 h-8 text-background" />
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-neon-cyan to-neon-indigo flex items-center justify-center overflow-hidden">
+            <img
+              src="/logo.jpg"
+              alt="HiveFlow"
+              className="w-full h-full object-cover"
+            />
           </div>
         </div>
 

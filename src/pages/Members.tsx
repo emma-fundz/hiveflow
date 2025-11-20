@@ -52,6 +52,8 @@ const Members = () => {
   const [newEmail, setNewEmail] = useState('');
   const [newPhone, setNewPhone] = useState('');
   const [newRole, setNewRole] = useState('Member');
+  const [isCreateWorkspaceOpen, setIsCreateWorkspaceOpen] = useState(false);
+  const [newWorkspaceName, setNewWorkspaceName] = useState('');
 
   const {
     data: memberDocs = [],
@@ -233,6 +235,65 @@ const Members = () => {
     },
   });
 
+  const createWorkspaceMutation = useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error('Not authenticated');
+      const rawUserId = (user as any)?.id as string | undefined;
+      const email = (user as any)?.email as string | undefined;
+      const displayName =
+        (user as any)?.name || email || 'Admin';
+
+      if (!rawUserId || !email) {
+        throw new Error('Missing user information');
+      }
+
+      const now = new Date().toISOString();
+      const workspaceName = newWorkspaceName || `${displayName}'s community`;
+      const workspaceDoc = await db.createDocument('workspaces', {
+        name: workspaceName,
+        ownerUserId: rawUserId,
+        createdAt: now,
+      });
+
+      const newWorkspaceId = (workspaceDoc as any)?.id as string;
+
+      await db.createDocument('members', {
+        name: displayName,
+        email,
+        phone: '',
+        role: 'Admin',
+        displayRole: 'Admin',
+        status: 'active',
+        joinedAt: now,
+        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(
+          displayName,
+        )}`,
+        ownerId: newWorkspaceId,
+        authUserId: rawUserId,
+        workspaceName,
+        communityName: workspaceName,
+      });
+
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('hf_active_workspace', newWorkspaceId);
+      }
+
+      return newWorkspaceId;
+    },
+    onSuccess: () => {
+      toast.success('New community created!');
+      setIsCreateWorkspaceOpen(false);
+      setNewWorkspaceName('');
+      if (typeof window !== 'undefined') {
+        window.location.reload();
+      }
+    },
+    onError: (err: any) => {
+      console.log('WORKSPACE CREATE ERROR:', err);
+      toast.error('Failed to create community');
+    },
+  });
+
   const deleteMemberMutation = useMutation({
     mutationFn: async (id: string) => {
       await db.deleteDocument('members', id);
@@ -273,6 +334,24 @@ const Members = () => {
     deleteMemberMutation.mutate(id);
   };
 
+  const handleCopyWorkspaceLink = () => {
+    if (!workspaceId) return;
+    try {
+      const payload = {
+        workspaceId,
+        role: 'Member',
+      };
+      const token = window.btoa(JSON.stringify(payload));
+      const baseUrl = APP_BASE_URL || window.location.origin;
+      const url = `${baseUrl}/join/${encodeURIComponent(token)}`;
+      navigator.clipboard.writeText(url);
+      toast.success('Join link copied to clipboard');
+    } catch (err) {
+      console.log('WORKSPACE SHARE LINK ERROR:', err);
+      toast.error('Failed to copy join link');
+    }
+  };
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -282,19 +361,20 @@ const Members = () => {
           <p className="text-muted-foreground">Manage your community members</p>
         </div>
 
-        {isAdmin && (
-          <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-gradient-to-r from-neon-cyan to-neon-indigo hover:opacity-90">
-                <UserPlus className="w-4 h-4 mr-2" />
-                Add Member
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="glass-card">
-              <DialogHeader>
-                <DialogTitle>Add New Member</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleAddMember} className="space-y-4">
+        <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+          {isAdmin && (
+            <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-gradient-to-r from-neon-cyan to-neon-indigo hover:opacity-90">
+                  <UserPlus className="w-4 h-4 mr-2" />
+                  Add Member
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="glass-card">
+                <DialogHeader>
+                  <DialogTitle>Add New Member</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleAddMember} className="space-y-4">
               <div className="space-y-2">
                 <Label>Name</Label>
                 <Input
@@ -335,13 +415,57 @@ const Members = () => {
                   <option value="Admin">Admin</option>
                 </select>
               </div>
-                <Button type="submit" className="w-full bg-gradient-to-r from-neon-cyan to-neon-indigo">
-                  Add Member
+                  <Button type="submit" className="w-full bg-gradient-to-r from-neon-cyan to-neon-indigo">
+                    Add Member
+                  </Button>
+                </form>
+              </DialogContent>
+            </Dialog>
+          )}
+
+          <Button
+            variant="outline"
+            onClick={handleCopyWorkspaceLink}
+          >
+            Copy Join Link
+          </Button>
+
+          <Dialog open={isCreateWorkspaceOpen} onOpenChange={setIsCreateWorkspaceOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                Create Community
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="glass-card">
+              <DialogHeader>
+                <DialogTitle>Create New Community</DialogTitle>
+              </DialogHeader>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  createWorkspaceMutation.mutate();
+                }}
+                className="space-y-4"
+              >
+                <div className="space-y-2">
+                  <Label>Community Name</Label>
+                  <Input
+                    placeholder="e.g. Skill Stream Technology"
+                    value={newWorkspaceName}
+                    onChange={(e) => setNewWorkspaceName(e.target.value)}
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  className="w-full bg-gradient-to-r from-neon-cyan to-neon-indigo"
+                  disabled={createWorkspaceMutation.isLoading}
+                >
+                  {createWorkspaceMutation.isLoading ? 'Creating...' : 'Create Community'}
                 </Button>
               </form>
             </DialogContent>
           </Dialog>
-        )}
+        </div>
       </div>
 
       {/* Search Bar */}
@@ -357,14 +481,14 @@ const Members = () => {
         </div>
       </Card>
 
-      {/* Members Table */}
+      {/* Members Table (Desktop) */}
       {isLoading && (
         <p className="text-muted-foreground text-sm px-1">Loading members...</p>
       )}
       {isError && (
         <p className="text-destructive text-sm px-1">Failed to load members.</p>
       )}
-      <Card className="glass-card p-6 overflow-x-auto">
+      <Card className="glass-card p-6 overflow-x-auto hidden md:block">
         <table className="w-full">
           <thead>
             <tr className="border-b border-border">
@@ -449,6 +573,86 @@ const Members = () => {
           </tbody>
         </table>
       </Card>
+
+      {/* Members List (Mobile) */}
+      <div className="grid grid-cols-1 gap-4 md:hidden">
+        {filteredMembers.map((member, index) => (
+          <motion.div
+            key={member.id}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.05 }}
+          >
+            <Card className="glass-card p-4 space-y-3">
+              <div className="flex items-center space-x-3">
+                <img
+                  src={member.avatar}
+                  alt={member.name}
+                  className="w-10 h-10 rounded-full ring-2 ring-primary/20"
+                />
+                <div>
+                  <p className="font-medium leading-tight">{member.name}</p>
+                  <div className="flex items-center space-x-2 text-xs text-muted-foreground mt-1">
+                    <Shield className="w-3 h-3 text-primary" />
+                    <span>{member.role}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-1 text-sm text-muted-foreground">
+                {member.email && (
+                  <div className="flex items-center space-x-2">
+                    <Mail className="w-4 h-4" />
+                    <span className="truncate">{member.email}</span>
+                  </div>
+                )}
+                {member.phone && (
+                  <div className="flex items-center space-x-2">
+                    <Phone className="w-4 h-4" />
+                    <span className="truncate">{member.phone}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between text-xs">
+                <Badge
+                  variant={
+                    member.status === 'active'
+                      ? 'default'
+                      : member.status === 'invited'
+                      ? 'secondary'
+                      : 'outline'
+                  }
+                  className={
+                    member.status === 'active'
+                      ? 'bg-green-500/20 text-green-500'
+                      : member.status === 'invited'
+                      ? 'bg-yellow-500/10 text-yellow-400'
+                      : ''
+                  }
+                >
+                  {member.status}
+                </Badge>
+                <span className="text-muted-foreground">
+                  {new Date(member.joinedDate).toLocaleDateString()}
+                </span>
+              </div>
+
+              {isAdmin && (
+                <div className="flex justify-end pt-2">
+                  <button
+                    onClick={() => handleDeleteMember(member.id)}
+                    className="text-xs text-destructive hover:underline flex items-center space-x-1"
+                  >
+                    <MoreVertical className="w-3 h-3" />
+                    <span>Manage</span>
+                  </button>
+                </div>
+              )}
+            </Card>
+          </motion.div>
+        ))}
+      </div>
     </div>
   );
 };

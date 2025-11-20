@@ -29,6 +29,9 @@ const Careers = lazy(() => import("./pages/Careers"));
 const Features = lazy(() => import("./pages/Features"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const AcceptInvite = lazy(() => import("./pages/AcceptInvite"));
+const Splash = lazy(() => import("./pages/Splash"));
+const JoinWorkspace = lazy(() => import("./pages/JoinWorkspace"));
+const PublicAnnouncement = lazy(() => import("./pages/PublicAnnouncement"));
 
 const queryClient = new QueryClient();
 
@@ -58,6 +61,8 @@ const App = () => (
                   <Route path="/login" element={<Login />} />
                   <Route path="/register" element={<Register />} />
                   <Route path="/accept-invite/:token" element={<AcceptInvite />} />
+                  <Route path="/join/:token" element={<JoinWorkspace />} />
+                  <Route path="/announcement/:token" element={<PublicAnnouncement />} />
                   <Route path="/pricing" element={<Pricing />} />
                   <Route path="/roadmap" element={<Roadmap />} />
                   <Route path="/about" element={<About />} />
@@ -67,6 +72,7 @@ const App = () => (
                   
                   {/* Protected Dashboard Routes */}
                   <Route element={<DashboardLayout />}>
+                    <Route path="/splash" element={<Splash />} />
                     <Route path="/dashboard" element={<Dashboard />} />
                     <Route path="/members" element={<Members />} />
                     <Route path="/events" element={<Events />} />

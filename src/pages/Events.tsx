@@ -12,6 +12,9 @@ import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import db from '@/lib/cocobase';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { sendNotificationEmail } from '@/lib/cocomailer';
+
+const APP_BASE_URL = import.meta.env.VITE_APP_BASE_URL as string | undefined;
 
 interface EventData {
   title: string;
@@ -55,6 +58,9 @@ const Events = () => {
   const [location, setLocation] = useState('');
   const [maxAttendees, setMaxAttendees] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatEvent, setChatEvent] = useState<Event | null>(null);
+  const [chatMessage, setChatMessage] = useState('');
 
   const {
     data: eventDocs = [],
@@ -97,6 +103,32 @@ const Events = () => {
     return true;
   });
 
+  const {
+    data: chatDocs = [],
+    isLoading: chatLoading,
+    isError: chatError,
+  } = useQuery({
+    queryKey: ['event-chats', workspaceId, chatEvent?.id],
+    queryFn: async () => {
+      if (!workspaceId || !chatEvent) return [];
+      const docs = await db.listDocuments('event_chats', {
+        filters: { ownerId: workspaceId, eventId: chatEvent.id },
+        sort: 'created_at',
+        order: 'asc',
+      });
+      return docs as any[];
+    },
+    enabled: chatOpen && !!workspaceId && !!chatEvent,
+    refetchInterval: chatOpen ? 5000 : false,
+  });
+
+  const chatMessages = (chatDocs as any[]).map((doc: any) => ({
+    id: doc.id,
+    authorName: doc.data?.authorName || 'Member',
+    message: doc.data?.message || '',
+    createdAt: doc.data?.createdAt,
+  }));
+
   const createEventMutation = useMutation({
     mutationFn: async () => {
       if (!workspaceId) throw new Error('Not authenticated');
@@ -117,7 +149,7 @@ const Events = () => {
       };
       return db.createDocument<EventData>('events', data);
     },
-    onSuccess: () => {
+    onSuccess: async (doc: any) => {
       queryClient.invalidateQueries({ queryKey: ['events', workspaceId] });
       toast.success('Event created successfully!');
       setIsCreateModalOpen(false);
@@ -127,10 +159,89 @@ const Events = () => {
       setTime('');
       setLocation('');
       setMaxAttendees('');
+
+      const baseUrl = APP_BASE_URL || window.location.origin;
+
+      // In-app notification document
+      try {
+        if (workspaceId) {
+          const nowIso = new Date().toISOString();
+          await db.createDocument('notifications', {
+            ownerId: workspaceId,
+            type: 'event',
+            title: doc?.data?.title || 'New event',
+            body: doc?.data?.description || '',
+            url: '/events',
+            createdAt: nowIso,
+          });
+        }
+      } catch (err) {
+        console.log('EVENT NOTIFICATION DOC ERROR:', err);
+      }
+
+      // Email workspace members about the new event
+      try {
+        if (workspaceId) {
+          const members: any[] = await db.listDocuments('members', {
+            filters: { ownerId: workspaceId },
+          });
+          const recipients = members
+            .map((m) => (m as any).data?.email as string | undefined)
+            .filter(Boolean) as string[];
+
+          if (recipients.length) {
+            const data = doc?.data || {};
+            const eventTitle = (data.title as string | undefined) || 'Community event';
+            const date = data.date as string | undefined;
+            const time = (data.time as string | undefined) || '';
+            let dateLabel = '';
+            if (date) {
+              try {
+                const dt = new Date(`${date}T${time || '00:00'}`);
+                dateLabel = dt.toLocaleString();
+              } catch {
+                dateLabel = `${date} ${time}`.trim();
+              }
+            }
+
+            const desc = (data.description as string | undefined) || '';
+            const combinedBody = dateLabel
+              ? `${eventTitle} • ${dateLabel}\n\n${desc}`
+              : `${eventTitle}\n\n${desc}`;
+
+            await sendNotificationEmail({
+              recipients,
+              subject: `New event: ${eventTitle}`,
+              title: eventTitle,
+              body: combinedBody,
+              ctaLabel: 'View events',
+              ctaUrl: `${baseUrl}/events`,
+            });
+          }
+        }
+      } catch (err) {
+        console.log('EVENT EMAIL NOTIFY ERROR:', err);
+      }
     },
     onError: (err: any) => {
       console.log('COCOBASE EVENTS CREATE ERROR:', err);
       toast.error('Failed to create event');
+    },
+  });
+
+  const deleteEventMutation = useMutation({
+    mutationFn: async (id: string) => {
+      if (!workspaceId) throw new Error('Not authenticated');
+      if (!isAdmin) throw new Error('Not authorized to delete events');
+      await db.deleteDocument('events', id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['events', workspaceId] });
+      toast.success('Event deleted');
+    },
+    onError: (err: any) => {
+      console.log('COCOBASE EVENTS DELETE ERROR:', err);
+      toast.error('Failed to delete event');
     },
   });
 
@@ -150,7 +261,7 @@ const Events = () => {
       });
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['events', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['events', workspaceId] });
       toast.success(variables.currentRsvp ? 'RSVP cancelled' : 'RSVP confirmed!');
     },
     onError: (err: any) => {
@@ -174,6 +285,65 @@ const Events = () => {
       currentRsvp: event.rsvp,
       attendees: event.attendees,
     });
+  };
+
+  const handleDeleteEvent = (id: string) => {
+    if (!isAdmin) {
+      toast.error('You do not have permission to delete events');
+      return;
+    }
+    const confirmed = window.confirm(
+      'Are you sure you want to delete this event? This action cannot be undone.',
+    );
+    if (!confirmed) return;
+    deleteEventMutation.mutate(id);
+  };
+
+  const handleOpenChat = (event: Event) => {
+    setChatEvent(event);
+    setChatOpen(true);
+  };
+
+  const sendMessageMutation = useMutation({
+    mutationFn: async () => {
+      if (!workspaceId || !chatEvent || !user) {
+        throw new Error('Not authenticated');
+      }
+      const trimmed = chatMessage.trim();
+      if (!trimmed) {
+        throw new Error('Message is empty');
+      }
+      const now = new Date().toISOString();
+      await db.createDocument('event_chats', {
+        ownerId: workspaceId,
+        eventId: chatEvent.id,
+        authorId: (user as any)?.id,
+        authorName:
+          (user as any)?.name || (user as any)?.email || 'Member',
+        message: trimmed,
+        createdAt: now,
+      });
+    },
+    onSuccess: () => {
+      setChatMessage('');
+      queryClient.invalidateQueries({
+        queryKey: ['event-chats', workspaceId, chatEvent?.id],
+      });
+    },
+    onError: (err: any) => {
+      console.log('COCOBASE EVENT CHAT SEND ERROR:', err);
+      toast.error('Failed to send message');
+    },
+  });
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = chatMessage.trim();
+    if (!trimmed) {
+      toast.error('Please write a message');
+      return;
+    }
+    await sendMessageMutation.mutateAsync();
   };
 
   const getTimeUntil = (date: string, time: string) => {
@@ -351,17 +521,91 @@ const Events = () => {
                   </div>
                 </div>
 
-                <Button
-                  onClick={() => handleRSVP(event)}
-                  className={`w-full ${event.rsvp ? 'bg-muted hover:bg-muted/80' : 'bg-gradient-to-r from-neon-cyan to-neon-indigo hover:opacity-90'}`}
-                >
-                  {event.rsvp ? 'Cancel RSVP' : 'RSVP Now'}
-                </Button>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full sm:w-auto"
+                    onClick={() => handleOpenChat(event)}
+                  >
+                    Open Chat
+                  </Button>
+                  <Button
+                    onClick={() => handleRSVP(event)}
+                    className={`w-full sm:w-auto ${
+                      event.rsvp
+                        ? 'bg-muted hover:bg-muted/80'
+                        : 'bg-gradient-to-r from-neon-cyan to-neon-indigo hover:opacity-90'
+                    }`}
+                  >
+                    {event.rsvp ? 'Cancel RSVP' : 'RSVP Now'}
+                  </Button>
+                  {isAdmin && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full sm:w-auto text-destructive border-destructive/50"
+                      onClick={() => handleDeleteEvent(event.id)}
+                    >
+                      Delete
+                    </Button>
+                  )}
+                </div>
               </div>
             </Card>
           </motion.div>
         ))}
       </div>
+      {chatEvent && (
+        <Dialog open={chatOpen} onOpenChange={setChatOpen}>
+          <DialogContent className="glass-card max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Chat about {chatEvent.title}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="max-h-64 overflow-y-auto space-y-3 rounded-lg border border-border/40 p-3 bg-background/40">
+                {chatLoading && (
+                  <p className="text-xs text-muted-foreground">
+                    Loading messages...
+                  </p>
+                )}
+                {chatError && (
+                  <p className="text-xs text-destructive">
+                    Failed to load messages.
+                  </p>
+                )}
+                {!chatLoading && chatMessages.length === 0 && !chatError && (
+                  <p className="text-xs text-muted-foreground">
+                    No messages yet. Start the conversation!
+                  </p>
+                )}
+                {chatMessages.map((msg) => (
+                  <div key={msg.id} className="text-left text-sm">
+                    <p className="font-medium">{msg.authorName}</p>
+                    <p className="text-muted-foreground text-xs">{msg.message}</p>
+                  </div>
+                ))}
+              </div>
+              <form onSubmit={handleSendMessage} className="space-y-2">
+                <Label>Message</Label>
+                <Textarea
+                  rows={3}
+                  placeholder="Share an update with attendees..."
+                  value={chatMessage}
+                  onChange={(e) => setChatMessage(e.target.value)}
+                />
+                <Button
+                  type="submit"
+                  className="w-full bg-gradient-to-r from-neon-cyan to-neon-indigo hover:opacity-90"
+                  disabled={sendMessageMutation.isPending}
+                >
+                  {sendMessageMutation.isPending ? 'Sending...' : 'Send Message'}
+                </Button>
+              </form>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 };

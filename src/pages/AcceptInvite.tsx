@@ -121,7 +121,7 @@ const AcceptInvite = () => {
       }
 
       toast.success('Your account has been created!');
-      navigate('/dashboard');
+      navigate('/splash');
     } catch (err) {
       console.log('ACCEPT INVITE ERROR:', err);
       toast.error('Failed to accept invite');
