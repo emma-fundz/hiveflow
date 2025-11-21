@@ -48,19 +48,31 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     // Apply color-blind mode styles
     root.setAttribute('data-color-blind-mode', colorBlindMode);
 
-    // Define alternative accessible color tokens for color-blind modes
-    if (colorBlindMode !== 'normal') {
-      // Use more distinguishable colors for color-blind users
-      root.style.setProperty('--primary', '210 100% 50%'); // Blue
-      root.style.setProperty('--secondary', '45 100% 50%'); // Yellow
-      root.style.setProperty('--neon-cyan', '210 100% 50%'); // Blue
-      root.style.setProperty('--neon-indigo', '45 100% 50%'); // Yellow
-    } else {
-      // Reset to default
+    // Define alternative accessible color tokens per color-blind mode
+    if (colorBlindMode === 'normal') {
+      // Reset to default tokens
       root.style.removeProperty('--primary');
       root.style.removeProperty('--secondary');
       root.style.removeProperty('--neon-cyan');
       root.style.removeProperty('--neon-indigo');
+    } else if (colorBlindMode === 'deuteranopia') {
+      // Blue + amber palette
+      root.style.setProperty('--primary', '210 100% 50%'); // Blue
+      root.style.setProperty('--secondary', '40 100% 55%'); // Amber
+      root.style.setProperty('--neon-cyan', '210 100% 50%');
+      root.style.setProperty('--neon-indigo', '40 100% 55%');
+    } else if (colorBlindMode === 'protanopia') {
+      // Teal + magenta palette
+      root.style.setProperty('--primary', '190 100% 45%'); // Teal
+      root.style.setProperty('--secondary', '310 80% 60%'); // Magenta
+      root.style.setProperty('--neon-cyan', '190 100% 45%');
+      root.style.setProperty('--neon-indigo', '310 80% 60%');
+    } else if (colorBlindMode === 'tritanopia') {
+      // Green + red palette
+      root.style.setProperty('--primary', '120 60% 50%'); // Green
+      root.style.setProperty('--secondary', '0 85% 60%'); // Red
+      root.style.setProperty('--neon-cyan', '120 60% 50%');
+      root.style.setProperty('--neon-indigo', '0 85% 60%');
     }
   }, [colorBlindMode, isDarkMode]);
 

@@ -13,6 +13,7 @@ import { useAuth } from '@/context/AuthContext';
 import db from '@/lib/cocobase';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { sendNotificationEmail } from '@/lib/cocomailer';
+import { WorkspaceNameBanner } from '@/components/WorkspaceNameBanner';
 
 const APP_BASE_URL = import.meta.env.VITE_APP_BASE_URL as string | undefined;
 
@@ -414,6 +415,8 @@ const Announcements = () => {
         <h1 className="text-4xl font-bold mb-2">Announcements</h1>
         <p className="text-muted-foreground">Stay updated with community news</p>
       </div>
+
+      <WorkspaceNameBanner />
 
       {/* New Announcement Card (Admins only) */}
       {isAdmin && (

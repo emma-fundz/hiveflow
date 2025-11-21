@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Calendar, MapPin, Users, Clock, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import { useAuth } from '@/context/AuthContext';
 import db from '@/lib/cocobase';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { sendNotificationEmail } from '@/lib/cocomailer';
+import { WorkspaceNameBanner } from '@/components/WorkspaceNameBanner';
 
 const APP_BASE_URL = import.meta.env.VITE_APP_BASE_URL as string | undefined;
 
@@ -124,10 +125,20 @@ const Events = () => {
 
   const chatMessages = (chatDocs as any[]).map((doc: any) => ({
     id: doc.id,
+    authorId: doc.data?.authorId as string | undefined,
     authorName: doc.data?.authorName || 'Member',
     message: doc.data?.message || '',
     createdAt: doc.data?.createdAt,
   }));
+
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!chatOpen) return;
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+  }, [chatOpen, chatMessages.length]);
 
   const createEventMutation = useMutation({
     mutationFn: async () => {
@@ -358,6 +369,20 @@ const Events = () => {
     return 'Soon';
   };
 
+  const renderMessageWithMentions = (text: string) => {
+    const parts = text.split(/(\s+)/); // keep spaces
+    return parts.map((part, idx) => {
+      if (part.startsWith('@') && part.length > 1) {
+        return (
+          <span key={idx} className="text-neon-cyan font-semibold">
+            {part}
+          </span>
+        );
+      }
+      return <span key={idx}>{part}</span>;
+    });
+  };
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -454,6 +479,8 @@ const Events = () => {
           </Dialog>
         )}
       </div>
+
+      <WorkspaceNameBanner />
 
       {/* Filter Tabs */}
       <div className="flex space-x-2">
@@ -558,12 +585,12 @@ const Events = () => {
       </div>
       {chatEvent && (
         <Dialog open={chatOpen} onOpenChange={setChatOpen}>
-          <DialogContent className="glass-card max-w-lg">
+          <DialogContent className="glass-card max-w-lg w-full mx-4 sm:mx-auto">
             <DialogHeader>
               <DialogTitle>Chat about {chatEvent.title}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
-              <div className="max-h-64 overflow-y-auto space-y-3 rounded-lg border border-border/40 p-3 bg-background/40">
+              <div className="max-h-64 sm:max-h-[60vh] overflow-y-auto space-y-3 rounded-lg border border-border/40 p-3 bg-background/40">
                 {chatLoading && (
                   <p className="text-xs text-muted-foreground">
                     Loading messages...
@@ -579,12 +606,42 @@ const Events = () => {
                     No messages yet. Start the conversation!
                   </p>
                 )}
-                {chatMessages.map((msg) => (
-                  <div key={msg.id} className="text-left text-sm">
-                    <p className="font-medium">{msg.authorName}</p>
-                    <p className="text-muted-foreground text-xs">{msg.message}</p>
-                  </div>
-                ))}
+                {chatMessages.map((msg) => {
+                  const isOwn = (user as any)?.id && msg.authorId === (user as any)?.id;
+                  const createdAtLabel = msg.createdAt
+                    ? new Date(msg.createdAt).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : '';
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`flex text-sm ${isOwn ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div
+                        className={`max-w-[80%] rounded-2xl px-3 py-2 shadow-sm ${
+                          isOwn
+                            ? 'bg-gradient-to-r from-neon-cyan to-neon-indigo text-background rounded-br-sm'
+                            : 'bg-background/80 border border-border/40 text-foreground rounded-bl-sm'
+                        }`}
+                      >
+                        {!isOwn && (
+                          <p className="font-semibold text-xs mb-0.5">{msg.authorName}</p>
+                        )}
+                        <p className="text-xs sm:text-sm whitespace-pre-wrap break-words">
+                          {renderMessageWithMentions(msg.message)}
+                        </p>
+                        {createdAtLabel && (
+                          <p className="text-[10px] text-muted-foreground/80 mt-1 text-right">
+                            {createdAtLabel}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+                <div ref={messagesEndRef} />
               </div>
               <form onSubmit={handleSendMessage} className="space-y-2">
                 <Label>Message</Label>

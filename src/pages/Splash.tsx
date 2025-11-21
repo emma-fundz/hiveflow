@@ -15,7 +15,7 @@ const Splash = () => {
     const nextPath = state?.next || '/dashboard';
     const timer = setTimeout(() => {
       navigate(nextPath, { replace: true });
-    }, 5000);
+    }, 3000);
     return () => clearTimeout(timer);
   }, [navigate, location]);
 

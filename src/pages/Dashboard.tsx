@@ -5,6 +5,8 @@ import { useAuth } from '@/context/AuthContext';
 import db from '@/lib/cocobase';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { WorkspaceNameBanner } from '@/components/WorkspaceNameBanner';
+import { GlobalAnnouncementBanner } from '@/components/GlobalAnnouncementBanner';
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -228,6 +230,12 @@ const Dashboard = () => {
         <h1 className="text-4xl font-bold mb-2">Welcome back, {user?.name}! 👋</h1>
         <p className="text-muted-foreground">Here's what's happening with your community today.</p>
       </motion.div>
+
+      {/* Community Name Banner */}
+      <WorkspaceNameBanner />
+
+      {/* Global HiveFlow Announcement */}
+      <GlobalAnnouncementBanner />
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

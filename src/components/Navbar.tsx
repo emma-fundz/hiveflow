@@ -15,6 +15,9 @@ export const Navbar = () => {
 
   const workspaceId = (user as any)?.workspaceId ?? (user as any)?.id;
   const authUserId = (user as any)?.id as string | undefined;
+  const role = (user as any)?.role as string | undefined;
+  const isOwner = !(user as any)?.workspaceId;
+  const isAdmin = role === 'Admin' || isOwner;
 
   const { data: membershipDocs = [] } = useQuery({
     queryKey: ['navbar-memberships', authUserId],
@@ -88,10 +91,26 @@ export const Navbar = () => {
       createdAt,
       createdAtLabel: createdAt ? new Date(createdAt).toLocaleString() : '',
       type: (data.type as string | undefined) || 'info',
+      readBy: ((data.readBy as string[] | undefined) || []) as string[],
     };
   });
 
-  const unreadCount = notifications.length;
+  const visibleNotifications = isAdmin
+    ? []
+    : notifications.filter((n) => !authUserId || !n.readBy.includes(authUserId));
+
+  const unreadCount = visibleNotifications.length;
+
+  const handleNotificationClick = async (id: string, readBy: string[] = []) => {
+    if (!authUserId) return;
+    if (readBy.includes(authUserId)) return;
+    try {
+      const nextReadBy = Array.from(new Set([...readBy, authUserId]));
+      await db.updateDocument('notifications', id, { readBy: nextReadBy });
+    } catch (err) {
+      console.log('NOTIFICATION MARK READ ERROR:', err);
+    }
+  };
 
   const handleWorkspaceChange = (event: any) => {
     const newWorkspaceId = event.target.value as string;
@@ -150,6 +169,12 @@ export const Navbar = () => {
                 <Link to="/events" className="text-foreground hover:text-primary transition-colors">
                   Events
                 </Link>
+                <Link to="/chat" className="text-foreground hover:text-primary transition-colors">
+                  Chat
+                </Link>
+                <Link to="/files" className="text-foreground hover:text-primary transition-colors">
+                  Files
+                </Link>
                 <Link to="/announcements" className="text-foreground hover:text-primary transition-colors">
                   Announcements
                 </Link>
@@ -173,54 +198,59 @@ export const Navbar = () => {
                     </select>
                   </div>
                 )}
-                <div className="relative">
-                  <button
-                    className="relative p-2 hover:bg-muted rounded-lg transition-colors"
-                    onClick={() => setNotificationsOpen(!notificationsOpen)}
-                  >
-                    <Bell className="w-5 h-5" />
-                    {unreadCount > 0 && (
-                      <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full"></span>
+                {!isAdmin && (
+                  <div className="relative">
+                    <button
+                      className="relative p-2 hover:bg-muted rounded-lg transition-colors"
+                      onClick={() => setNotificationsOpen(!notificationsOpen)}
+                    >
+                      <Bell className="w-5 h-5" />
+                      {unreadCount > 0 && (
+                        <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full"></span>
+                      )}
+                    </button>
+                    {notificationsOpen && (
+                      <div className="absolute right-0 mt-2 w-80 glass-card border border-glass-border rounded-xl shadow-lg max-h-96 overflow-y-auto z-50">
+                        <div className="flex items-center justify-between px-3 py-2 border-b border-border/60">
+                          <span className="text-sm font-medium">Notifications</span>
+                          <span className="text-xs text-muted-foreground">
+                            {unreadCount ? `${unreadCount} new` : 'No new notifications'}
+                          </span>
+                        </div>
+                        <div className="p-2 space-y-1">
+                          {visibleNotifications.length === 0 && (
+                            <p className="text-xs text-muted-foreground px-2 py-3">
+                              No notifications yet.
+                            </p>
+                          )}
+                          {visibleNotifications.slice(0, 10).map((n) => (
+                            <Link
+                              key={n.id}
+                              to={n.url}
+                              className="flex flex-col px-3 py-2 rounded-lg hover:bg-muted/60 text-xs"
+                              onClick={() => {
+                                handleNotificationClick(n.id, n.readBy);
+                                setNotificationsOpen(false);
+                              }}
+                            >
+                              <span className="font-medium text-foreground">{n.title}</span>
+                              {n.body && (
+                                <span className="text-muted-foreground line-clamp-2">
+                                  {n.body}
+                                </span>
+                              )}
+                              {n.createdAtLabel && (
+                                <span className="text-[10px] text-muted-foreground mt-1">
+                                  {n.createdAtLabel}
+                                </span>
+                              )}
+                            </Link>
+                          ))}
+                        </div>
+                      </div>
                     )}
-                  </button>
-                  {notificationsOpen && (
-                    <div className="absolute right-0 mt-2 w-80 glass-card border border-glass-border rounded-xl shadow-lg max-h-96 overflow-y-auto z-50">
-                      <div className="flex items-center justify-between px-3 py-2 border-b border-border/60">
-                        <span className="text-sm font-medium">Notifications</span>
-                        <span className="text-xs text-muted-foreground">
-                          {unreadCount ? `${unreadCount} new` : 'No new notifications'}
-                        </span>
-                      </div>
-                      <div className="p-2 space-y-1">
-                        {notifications.length === 0 && (
-                          <p className="text-xs text-muted-foreground px-2 py-3">
-                            No notifications yet.
-                          </p>
-                        )}
-                        {notifications.slice(0, 10).map((n) => (
-                          <Link
-                            key={n.id}
-                            to={n.url}
-                            className="flex flex-col px-3 py-2 rounded-lg hover:bg-muted/60 text-xs"
-                            onClick={() => setNotificationsOpen(false)}
-                          >
-                            <span className="font-medium text-foreground">{n.title}</span>
-                            {n.body && (
-                              <span className="text-muted-foreground line-clamp-2">
-                                {n.body}
-                              </span>
-                            )}
-                            {n.createdAtLabel && (
-                              <span className="text-[10px] text-muted-foreground mt-1">
-                                {n.createdAtLabel}
-                              </span>
-                            )}
-                          </Link>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
+                  </div>
+                )}
                 <button className="p-2 hover:bg-muted rounded-lg transition-colors">
                   <Search className="w-5 h-5" />
                 </button>
@@ -284,6 +314,12 @@ export const Navbar = () => {
                 <Link to="/events" className="block py-2 text-foreground hover:text-primary transition-colors">
                   Events
                 </Link>
+                <Link to="/chat" className="block py-2 text-foreground hover:text-primary transition-colors">
+                  Chat
+                </Link>
+                <Link to="/files" className="block py-2 text-foreground hover:text-primary transition-colors">
+                  Files
+                </Link>
                 <Link to="/announcements" className="block py-2 text-foreground hover:text-primary transition-colors">
                   Announcements
                 </Link>
@@ -295,15 +331,18 @@ export const Navbar = () => {
                 <Link to="/settings" className="block py-2 text-foreground hover:text-primary transition-colors">
                   Settings
                 </Link>
-                {notifications.length > 0 && (
+                {!isAdmin && visibleNotifications.length > 0 && (
                   <div className="pt-2 mt-2 border-t border-border/60 space-y-1">
                     <p className="text-xs text-muted-foreground mb-1">Notifications</p>
-                    {notifications.slice(0, 5).map((n) => (
+                    {visibleNotifications.slice(0, 5).map((n) => (
                       <Link
                         key={n.id}
                         to={n.url}
                         className="block px-2 py-1 rounded-lg hover:bg-muted/60 text-xs"
-                        onClick={() => setMobileMenuOpen(false)}
+                        onClick={() => {
+                          handleNotificationClick(n.id, n.readBy);
+                          setMobileMenuOpen(false);
+                        }}
                       >
                         <span className="block font-medium text-foreground">{n.title}</span>
                         {n.body && (

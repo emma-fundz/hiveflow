@@ -14,8 +14,9 @@ import db from '@/lib/cocobase';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
-const ACCOUNT_DELETE_URL = import.meta.env
-  .VITE_ACCOUNT_DELETE_URL as string | undefined;
+const ACCOUNT_DELETE_URL =
+  (import.meta.env.VITE_ACCOUNT_DELETE_URL as string | undefined) ||
+  '/.netlify/functions/delete-account';
 
 const Settings = () => {
   const { user, logout, refreshUser } = useAuth();

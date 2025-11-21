@@ -12,6 +12,7 @@ import { useAuth } from '@/context/AuthContext';
 import db from '@/lib/cocobase';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { sendInviteEmail } from '@/lib/cocomailer';
+import { WorkspaceNameBanner } from '@/components/WorkspaceNameBanner';
 
 const APP_BASE_URL = import.meta.env.VITE_APP_BASE_URL as string | undefined;
 
@@ -458,15 +459,17 @@ const Members = () => {
                 <Button
                   type="submit"
                   className="w-full bg-gradient-to-r from-neon-cyan to-neon-indigo"
-                  disabled={createWorkspaceMutation.isLoading}
+                  disabled={createWorkspaceMutation.isPending}
                 >
-                  {createWorkspaceMutation.isLoading ? 'Creating...' : 'Create Community'}
+                  {createWorkspaceMutation.isPending ? 'Creating...' : 'Create Community'}
                 </Button>
               </form>
             </DialogContent>
           </Dialog>
         </div>
       </div>
+
+      <WorkspaceNameBanner />
 
       {/* Search Bar */}
       <Card className="glass-card p-4">

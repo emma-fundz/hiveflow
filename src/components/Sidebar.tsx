@@ -9,7 +9,8 @@ import {
   BarChart3, 
   Settings,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  MessageCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
@@ -19,6 +20,7 @@ const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
   { icon: Users, label: 'Members', path: '/members' },
   { icon: Calendar, label: 'Events', path: '/events' },
+  { icon: MessageCircle, label: 'Chat', path: '/chat' },
   { icon: Megaphone, label: 'Announcements', path: '/announcements' },
   { icon: FileText, label: 'Files', path: '/files' },
   { icon: BarChart3, label: 'Analytics', path: '/stats' },

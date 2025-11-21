@@ -21,12 +21,14 @@ const Announcements = lazy(() => import("./pages/Announcements"));
 const Files = lazy(() => import("./pages/Files"));
 const Analytics = lazy(() => import("./pages/Analytics"));
 const Settings = lazy(() => import("./pages/Settings"));
+const Chat = lazy(() => import("./pages/Chat"));
 const Pricing = lazy(() => import("./pages/Pricing"));
 const Roadmap = lazy(() => import("./pages/Roadmap"));
 const About = lazy(() => import("./pages/About"));
 const Blog = lazy(() => import("./pages/Blog"));
 const Careers = lazy(() => import("./pages/Careers"));
 const Features = lazy(() => import("./pages/Features"));
+const Docs = lazy(() => import("./pages/Docs"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const AcceptInvite = lazy(() => import("./pages/AcceptInvite"));
 const Splash = lazy(() => import("./pages/Splash"));
@@ -69,6 +71,7 @@ const App = () => (
                   <Route path="/blog" element={<Blog />} />
                   <Route path="/careers" element={<Careers />} />
                   <Route path="/features" element={<Features />} />
+                  <Route path="/docs" element={<Docs />} />
                   
                   {/* Protected Dashboard Routes */}
                   <Route element={<DashboardLayout />}>
@@ -76,6 +79,7 @@ const App = () => (
                     <Route path="/dashboard" element={<Dashboard />} />
                     <Route path="/members" element={<Members />} />
                     <Route path="/events" element={<Events />} />
+                    <Route path="/chat" element={<Chat />} />
                     <Route path="/announcements" element={<Announcements />} />
                     <Route path="/files" element={<Files />} />
                     <Route path="/stats" element={<Analytics />} />

@@ -857,3 +857,230 @@ This changelog tracks all significant changes to the ClubManager platform. Each 
 - `src/context/AuthContext.tsx` (relaxed restore logic around `hf_auth_user` and `db.isAuthenticated()`)
 - `changelog.md` (this entry)
 
+
+## 2025-11-21 13:10:00
+
+### ✨ UX polish: 3s splash, richer event chat, docs page, Files in mobile nav & accessibility fixes
+
+**Overview:**
+- Tightened several UX details based on real-world usage: shorter splash timing, a richer per-event chat experience, clearer documentation, and better mobile navigation for Files and notifications.
+
+**Splash Timing (`src/pages/Splash.tsx`):**
+- Reduced the splash screen duration from 5 seconds to **3 seconds** while keeping the existing behavior:
+  - Splash still reads the `next` route from `location.state`.
+  - After 3 seconds it redirects to that route (or `/dashboard` by default).
+
+**Navbar & Notifications (`src/components/Navbar.tsx`):**
+- **Files visibility:**
+  - Added a **Files** link to both the authenticated desktop navbar and the mobile hamburger menu so admins can access the Files page on mobile as well.
+- **Notifications behavior:**
+  - Introduced `readBy` support on notifications; the navbar now treats notifications as **per-user** with read-on-click behavior.
+  - Only non-admin members see notifications; admins no longer see the bell count or notification lists.
+  - When a member taps a notification (desktop dropdown or mobile list), the app:
+    - Marks it as read by appending their `authUserId` to `readBy` on the notification document.
+    - Removes it from the visible list so read notifications no longer clutter the menu.
+  - The red dot on the bell now reflects the count of **unread** notifications for that member.
+
+**Color-Blind Friendly Modes (`src/context/ThemeContext.tsx`):**
+- Previously, all non-normal color-blind modes shared the same color overrides, making several options feel identical.
+- Updated the theme logic so each mode gets a distinct accessible palette:
+  - **Deuteranopia:** blue + amber accents.
+  - **Protanopia:** teal + magenta accents.
+  - **Tritanopia:** green + red accents.
+- Normal mode clears overrides and falls back to the default design system colors.
+
+**Event Chat UX Upgrade (`src/pages/Events.tsx`):**
+- Upgraded the per-event chat modal to feel more like a lightweight messaging interface:
+  - Messages now include `authorId`, allowing the UI to align the current user&apos;s messages to the **right** with a primary gradient bubble, and others on the **left** with a muted bubble.
+  - Added a helper to highlight simple `@mentions` inside messages with a neon accent.
+  - Each message shows a small local time label under the bubble.
+  - The chat list auto-scrolls to the latest message whenever new messages arrive or the chat opens.
+  - On mobile, the chat dialog is now full-width with improved max-height for the scrollable area.
+
+**Docs Page (`src/pages/Docs.tsx`, `src/App.tsx`):**
+- Created a new public **Docs** page at `/docs` explaining how to use HiveFlow:
+  - Getting started and becoming an Admin.
+  - Inviting members and creating new communities.
+  - Changing themes and color-blind modes.
+  - Updating profile information and avatar.
+  - Working with Files, announcements, notifications, events and event chat.
+- Registered `/docs` as a lazy-loaded public route in `App.tsx`.
+- The docs page follows the same glassmorphic, mobile-first design as the rest of the marketing site.
+
+**Files Modified / Created:**
+- `src/pages/Splash.tsx` (3-second timer)
+- `src/components/Navbar.tsx` (Files in nav, member-only notifications, read-on-click)
+- `src/context/ThemeContext.tsx` (distinct palettes per color-blind mode)
+- `src/pages/Events.tsx` (enhanced per-event chat UI)
+- `src/pages/Docs.tsx` (new public documentation page)
+- `src/App.tsx` (registered `/docs` route)
+- `changelog.md` (this entry)
+
+
+## 2025-11-21 13:45:00
+
+### 💬 Global community chat & 🧨 Delete Account backend endpoint
+
+**Overview:**
+- Added a rich, WhatsApp-style global chat experience for each community (workspace), accessible from the dashboard navigation.
+- Wired the Delete Account button in Settings to a real backend endpoint implemented as a Netlify serverless function.
+
+**Global Community Chat (`src/pages/Chat.tsx`, `src/App.tsx`, `src/components/Sidebar.tsx`, `src/components/Navbar.tsx`):**
+- Created a new protected **Chat** page at `/chat`:
+  - Uses a new Cocobase collection `community_chats` (one chat stream per workspace) queried via:
+    - `db.listDocuments('community_chats', { filters: { ownerId: workspaceId }, sort: 'created_at', order: 'asc' })`.
+    - `ownerId` is the workspace id (`user.workspaceId ?? user.id`).
+  - Messages are written with:
+    - `ownerId`, `authorId`, `authorName`, `authorAvatar`, `message`, and `createdAt` (ISO string).
+  - The UI is fully responsive and mobile-first:
+    - Full-page chat layout with a fixed header, scrollable messages area, and bottom composer.
+    - Own messages are right-aligned with a neon gradient bubble; others are left-aligned with a subtle glass bubble.
+    - Avatars are shown for senders on larger screens for extra personality.
+    - Each bubble shows a small local time label (HH:MM) for the message.
+    - The chat automatically scrolls to the latest message whenever new messages arrive.
+  - Mentions and conversation context:
+    - Simple `@mentions` inside messages are highlighted using a neon accent so tagging people stands out.
+    - A helper text encourages using the chat to discuss events and announcements.
+  - Uses React Query with a 3-second poll interval while on the page to keep messages fresh.
+- Navigation & discoverability:
+  - Added a **Chat** item to the desktop sidebar menu between Events and Announcements using the `MessageCircle` icon.
+  - Exposed **Chat** in the authenticated navbar on both desktop and mobile so community chat is always one tap away.
+  - Header includes quick links to `/events` and `/announcements` so users can easily jump between chat and those pages.
+
+**Delete Account Backend Wiring (`netlify/functions/delete-account.js`, `src/pages/Settings.tsx`):**
+- Implemented a Netlify serverless function as the default backend endpoint for account deletion:
+  - File: `netlify/functions/delete-account.js`.
+  - Accepts `POST` requests with JSON body `{ userId, email }`.
+  - Validates input, logs the deletion request payload, and returns `{ success: true }` on success.
+  - Returns `400` when both `userId` and `email` are missing, `405` for non-POST methods, and `500` on unexpected errors.
+  - Includes clear TODO comments describing where to integrate a real Cocobase admin API or other backend logic to actually remove the user and related workspace data.
+- Updated the Settings page to point at this backend by default:
+  - `ACCOUNT_DELETE_URL` now resolves to `import.meta.env.VITE_ACCOUNT_DELETE_URL` **or** falls back to `/.netlify/functions/delete-account` when the env variable is not set.
+  - This means the existing Delete Account button in `Settings` now posts to a concrete backend URL by default in Netlify deployments.
+  - Projects that already have a custom deletion API can keep using it by setting `VITE_ACCOUNT_DELETE_URL`.
+
+**Files Created / Modified:**
+- `netlify/functions/delete-account.js` (new Netlify function handling account deletion POST requests)
+- `src/pages/Settings.tsx` (defaulted `ACCOUNT_DELETE_URL` to the Netlify function path when env is not configured)
+- `src/pages/Chat.tsx` (new global community chat page with mobile-first, WhatsApp-like UI)
+- `src/App.tsx` (lazy-loaded `Chat` page and registered `/chat` as a protected route)
+- `src/components/Sidebar.tsx` (added Chat item with `MessageCircle` icon between Events and Announcements)
+- `src/components/Navbar.tsx` (added Chat link to authenticated desktop and mobile navigation)
+- `changelog.md` (this entry)
+
+
+## 2025-11-21 15:35:00
+
+### 🏷️ Community name banner & 🌐 global owner announcements
+
+**Overview:**
+- Surfaced the community/workspace name prominently at the top of Dashboard, Chat, Members, Events, and Announcements.
+- Gave admins/owners an inline way to set or edit the community name, syncing it back to Cocobase `members` and `workspaces` collections.
+- Implemented a secure, owner-only global announcement system that emails all HiveFlow users and shows a dismissible in-app banner.
+- Moved the global broadcast UI out of the main React app into a separate `owner-broadcast.html` console reachable only via direct URL.
+
+**Workspace Name Banner (`src/components/WorkspaceNameBanner.tsx`, Dashboard/Members/Events/Announcements/Chat):**
+- Created a reusable `WorkspaceNameBanner` component that determines the current workspace id as `workspaceId = user.workspaceId ?? user.id`.
+- On load, queries the `members` collection for documents with `ownerId = workspaceId` and picks the first non-empty `workspaceName` or `communityName`.
+- When no explicit name is found, falls back to a friendly default based on the first member’s `displayRole`/`role` (e.g. `Admin community`) or a generic `Community <id>` label.
+- For admins/owners:
+  - Shows an **Edit/Set name** button that toggles an inline input field.
+  - Validates that the new name is non-empty before saving.
+  - On save:
+    - Fetches all `members` with `ownerId = workspaceId` and updates each document’s `workspaceName` and `communityName` fields to the trimmed value.
+    - If no member documents exist yet, creates an initial admin member record for the current user including `workspaceName` and `communityName`.
+    - Attempts to update the corresponding `workspaces` document with `name: <trimmed>` (best-effort; logs errors but does not block the UI).
+  - Invalidates related React Query caches so the new name appears across the app:
+    - `['workspace-name', workspaceId]` (banner itself).
+    - `['navbar-memberships', user.id]` (workspace switcher labels).
+    - `['members', workspaceId]` (members list).
+- UI:
+  - Glassmorphic card with a gradient `Users` icon, "Current community" label, and the current name.
+  - Mobile and desktop copy hint that the name is visible to all members.
+
+**Community Name on Core Pages (`src/pages/Dashboard.tsx`, `src/pages/Members.tsx`, `src/pages/Events.tsx`, `src/pages/Announcements.tsx`, `src/pages/Chat.tsx`):**
+- Imported and rendered `WorkspaceNameBanner` near the top of each core workspace page so members always see which community they are in:
+  - **Dashboard:** banner appears directly under the page header, above stats and recent activity.
+  - **Members:** banner sits above the search and invite controls, framing the people list as belonging to that community.
+  - **Events:** banner is placed below the Events heading so upcoming events are clearly scoped to the current workspace.
+  - **Announcements:** banner appears below the page title and before the composer/feed for a clear sense of place.
+  - **Chat:** banner sits under the chat header so the global workspace chat explicitly shows the community name on both mobile and desktop.
+- Ensured the layout remains mobile-first with appropriate padding and stacking behavior on small screens.
+
+**Global Broadcast Backend (`netlify/functions/global-broadcast.js`):**
+- Added a Netlify serverless function to handle global owner broadcasts using Cocobase and Coco Mailer:
+  - Reads configuration from environment variables:
+    - `VITE_COCOBASE_API_KEY` / `VITE_COCOBASE_PROJECT_ID` for Cocobase.
+    - `VITE_COCO_MAILER_CONFIG_KEY` / `COCO_MAILER_CONFIG_KEY` for the Coco Mailer config key.
+    - `VITE_OWNER_EMAIL` / `OWNER_EMAIL` for the authorized HiveFlow owner email address.
+  - Accepts `POST` requests with JSON body `{ subject, title, message, ctaUrl?, ctaLabel?, email, userId? }`.
+  - Validates:
+    - HTTP method is `POST`.
+    - `email` matches the configured owner email.
+    - `subject`, `title`, and `message` are present.
+- Recipient loading:
+  - Uses the Cocobase SDK to `listDocuments('members')` sorted by `created_at`.
+  - Collects `data.email` from each member document, trimming and lowercasing.
+  - Builds a unique list of recipient emails in memory and bails with a helpful error if none are found.
+- Email sending:
+  - Constructs a fully styled HTML email body with a "Global HiveFlow Announcement" pill, title, and message (preserving line breaks).
+  - Adds a primary CTA button using `ctaLabel` (default: `Open HiveFlow`) and `ctaUrl` (default: `VITE_APP_BASE_URL` or `https://hiveflow.app`).
+  - Sends the email via Coco Mailer at `${COCO_MAILER_BASE_URL}/api/send-mail/{configKey}` with payload `{ recipient_list, subject, content, is_html: true }`.
+  - Handles and logs HTTP/network errors and returns appropriate status codes to the caller.
+- Persistence:
+  - After a successful send, creates a document in the `global_announcements` collection with:
+    - `title`, `message`, `subject`, `ctaUrl`, `ctaLabel`, `createdAt`, `sentBy`, and `recipientsCount`.
+  - Errors when saving the record are logged but do not cause the overall request to fail.
+
+**In-App Global Announcement Banner (`src/components/GlobalAnnouncementBanner.tsx`, `src/pages/Dashboard.tsx`):**
+- Created a `GlobalAnnouncementBanner` component that:
+  - Uses React Query to load the most recent document from the `global_announcements` collection.
+  - Only renders for authenticated users and hides itself while loading or on error.
+  - Picks the latest announcement and displays:
+    - A "Global HiveFlow Announcement" label.
+    - The announcement `title` and a preview of the `message` (first ~140 characters).
+    - A local time label for when the announcement was sent, if `createdAt` is present.
+- Per-user dismissal behavior:
+  - Stores a dismissal flag in `localStorage` under the key `hf_global_announcement_dismissed_<announcementId>_<userId>`.
+  - On mount, checks this key and hides the banner if the user has already dismissed it.
+  - Provides a **Dismiss** button that sets the flag and removes the banner from view without affecting other users.
+- Detail & CTA interaction:
+  - Includes a **View details / Hide details** toggle that switches between the preview and full message text.
+  - When `ctaUrl` is present, shows a gradient button (with `ctaLabel`, defaulting to `Open HiveFlow`) linking out in a new tab.
+- Integrated the banner near the top of the Dashboard so new global announcements are highly visible when members sign in.
+
+**Owner Broadcast Console (`owner-broadcast.html`):**
+- Added a standalone owner console HTML file at the project root for sending global broadcasts outside of the main app shell:
+  - Glassmorphic card UI with HiveFlow branding (HF logo mark + gradient text) and a "Global HiveFlow Broadcast" pill.
+  - Form fields:
+    - Owner email (must match the configured owner email for the request to succeed).
+    - Email subject.
+    - Announcement title.
+    - Main message body (supports multi-line content).
+    - Optional CTA label (defaults to "Open HiveFlow").
+    - Optional CTA URL (defaults to the app base URL when left blank).
+  - On submit:
+    - Calls `/.netlify/functions/global-broadcast` with the form payload as JSON.
+    - Shows inline status messages for success and error including the approximate number of recipients.
+    - Resets the form on success while leaving a subtle owner email status indicator.
+  - Includes a footer note reminding the owner to keep the URL private and treat it as an admin console.
+- This page lives outside of React Router and is **not** linked from the main HiveFlow navigation; it is intended to be opened only by the owner via a saved/bookmarked URL.
+
+**Main App Cleanup (`src/App.tsx`, `src/components/Navbar.tsx`, `src/pages/OwnerBroadcast.tsx`):**
+- Removed the internal React route and lazy import for the previous `OwnerBroadcast` page from `App.tsx` so the broadcast UI is no longer part of the main authenticated shell.
+- Cleaned up `Navbar.tsx` to remove owner-only Global Broadcast links and gating logic based on `VITE_OWNER_EMAIL`/`OWNER_EMAIL`.
+- Kept the new global broadcast system accessible exclusively through the standalone `owner-broadcast.html` console.
+
+**Files Created / Modified:**
+- `src/components/WorkspaceNameBanner.tsx` (reusable community/workspace name banner with admin inline editing)
+- `src/components/GlobalAnnouncementBanner.tsx` (in-app global announcement banner with per-user dismissal)
+- `src/pages/Dashboard.tsx` (added WorkspaceNameBanner and GlobalAnnouncementBanner near the top of the page)
+- `src/pages/Members.tsx` (rendered WorkspaceNameBanner above the member list)
+- `src/pages/Events.tsx` (rendered WorkspaceNameBanner below the Events header)
+- `src/pages/Announcements.tsx` (rendered WorkspaceNameBanner below the Announcements header)
+- `src/pages/Chat.tsx` (rendered WorkspaceNameBanner below the chat header)
+- `netlify/functions/global-broadcast.js` (new Netlify function for owner-only global announcements via Coco Mailer)
+- `owner-broadcast.html` (standalone owner console for sending global broadcasts)
+- `src/App.tsx` (removed internal OwnerBroadcast route and lazy import)
+- `src/components/Navbar.tsx` (removed in-app Global Broadcast navigation/UI)
+- `changelog.md` (this entry)

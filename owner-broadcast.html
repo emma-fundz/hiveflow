@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HiveFlow Owner Broadcast</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #020617;
+        --card: rgba(15, 23, 42, 0.96);
+        --border: rgba(148, 163, 184, 0.4);
+        --accent1: #22d3ee;
+        --accent2: #6366f1;
+        --text: #e5e7eb;
+        --muted: #9ca3af;
+        --danger: #f97373;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background: radial-gradient(circle at top, #1f2937, var(--bg));
+        color: var(--text);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px 12px;
+      }
+      .shell {
+        width: 100%;
+        max-width: 720px;
+      }
+      .logo-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 16px;
+        justify-content: center;
+      }
+      .logo-mark {
+        width: 40px;
+        height: 40px;
+        border-radius: 16px;
+        background: linear-gradient(135deg, var(--accent1), var(--accent2));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        color: #020617;
+        font-size: 18px;
+      }
+      .logo-text {
+        font-weight: 700;
+        font-size: 22px;
+        background: linear-gradient(90deg, var(--accent1), var(--accent2));
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+      .card {
+        background: var(--card);
+        border-radius: 24px;
+        border: 1px solid var(--border);
+        box-shadow: 0 24px 60px rgba(15, 23, 42, 0.8);
+        padding: 24px 22px 22px;
+        max-width: 720px;
+        margin: 0 auto;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 8px 16px;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.6);
+        background: rgba(15, 23, 42, 0.9);
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #a5b4fc;
+        margin-bottom: 14px;
+      }
+      h1 {
+        margin: 0 0 6px;
+        font-size: 22px;
+      }
+      p {
+        margin: 4px 0;
+        font-size: 14px;
+        color: var(--muted);
+      }
+      label {
+        display: block;
+        font-size: 12px;
+        font-weight: 500;
+        margin-bottom: 4px;
+      }
+      input,
+      textarea {
+        width: 100%;
+        border-radius: 12px;
+        border: 1px solid rgba(51, 65, 85, 0.9);
+        background: rgba(15, 23, 42, 0.85);
+        padding: 10px 11px;
+        font-size: 13px;
+        color: var(--text);
+        outline: none;
+      }
+      input:focus,
+      textarea:focus {
+        border-color: var(--accent1);
+        box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.4);
+      }
+      textarea {
+        resize: vertical;
+        min-height: 120px;
+      }
+      .field {
+        margin-bottom: 14px;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+      .row .field {
+        flex: 1 1 0;
+      }
+      .hint {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 4px;
+      }
+      .footer-row {
+        margin-top: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .footer-row span:last-child {
+        text-align: right;
+      }
+      .button-row {
+        margin-top: 18px;
+      }
+      button {
+        width: 100%;
+        padding: 11px 16px;
+        border-radius: 999px;
+        border: none;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 14px;
+        color: #020617;
+        background: linear-gradient(90deg, var(--accent1), var(--accent2));
+        box-shadow: 0 18px 40px rgba(56, 189, 248, 0.5);
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: default;
+        box-shadow: none;
+      }
+      .alert {
+        margin-top: 12px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        font-size: 12px;
+      }
+      .alert-info {
+        background: rgba(37, 99, 235, 0.12);
+        border: 1px solid rgba(59, 130, 246, 0.5);
+        color: #bfdbfe;
+      }
+      .alert-error {
+        background: rgba(248, 113, 113, 0.08);
+        border: 1px solid rgba(248, 113, 113, 0.7);
+        color: #fecaca;
+      }
+      .alert-success {
+        background: rgba(34, 197, 94, 0.08);
+        border: 1px solid rgba(34, 197, 94, 0.7);
+        color: #bbf7d0;
+      }
+      .small-note {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 6px;
+      }
+      @media (max-width: 480px) {
+        .card {
+          padding: 18px 16px 18px;
+          border-radius: 20px;
+        }
+        h1 {
+          font-size: 19px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <div class="logo-row">
+        <div class="logo-mark">HF</div>
+        <div class="logo-text">HiveFlow Owner</div>
+      </div>
+      <div class="card">
+        <div class="pill">Global HiveFlow Broadcast</div>
+        <h1>Send a message to every HiveFlow user</h1>
+        <p>
+          This tool is for you, the HiveFlow owner, to email all users and show a global in-app announcement.
+          Use it carefully.
+        </p>
+
+        <form id="broadcast-form">
+          <div class="field">
+            <label for="ownerEmail">Owner email</label>
+            <input
+              id="ownerEmail"
+              name="ownerEmail"
+              type="email"
+              placeholder="your-owner-email@example.com"
+              required
+            />
+            <div class="hint">
+              Must match the configured OWNER_EMAIL / VITE_OWNER_EMAIL value on your backend.
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="subject">Email subject</label>
+            <input
+              id="subject"
+              name="subject"
+              type="text"
+              placeholder="e.g. New HiveFlow feature release"
+              required
+            />
+          </div>
+
+          <div class="field">
+            <label for="title">Announcement title</label>
+            <input
+              id="title"
+              name="title"
+              type="text"
+              placeholder="e.g. Big improvements to community chat"
+              required
+            />
+          </div>
+
+          <div class="field">
+            <label for="message">Message</label>
+            <textarea
+              id="message"
+              name="message"
+              placeholder="Write your global message here. This text is used for both the email body and the in-app banner."
+              required
+            ></textarea>
+            <div class="hint">
+              You can use line breaks. The email template will keep your formatting and add HiveFlow styling.
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="field">
+              <label for="ctaLabel">CTA label (optional)</label>
+              <input
+                id="ctaLabel"
+                name="ctaLabel"
+                type="text"
+                placeholder="Open HiveFlow"
+              />
+            </div>
+            <div class="field">
+              <label for="ctaUrl">CTA URL (optional)</label>
+              <input
+                id="ctaUrl"
+                name="ctaUrl"
+                type="url"
+                placeholder="https://your-hiveflow-app-url.com/"
+              />
+              <div class="hint">
+                If left empty, your app base URL will be used.
+              </div>
+            </div>
+          </div>
+
+          <div class="footer-row">
+            <span>
+              This will send one email to every known HiveFlow member email and create a global in-app announcement.
+            </span>
+            <span id="statusOwner"></span>
+          </div>
+
+          <div class="button-row">
+            <button type="submit" id="sendBtn">Send to everyone</button>
+          </div>
+
+          <div id="alert" class="alert alert-info" style="display: none"></div>
+          <div class="small-note">
+            Tip: Save this page URL privately (e.g. in your password manager). Do not share it publicly.
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const form = document.getElementById('broadcast-form');
+        const alertBox = document.getElementById('alert');
+        const sendBtn = document.getElementById('sendBtn');
+        const statusOwner = document.getElementById('statusOwner');
+
+        function setAlert(type, message) {
+          alertBox.style.display = 'block';
+          alertBox.textContent = message;
+          alertBox.className = 'alert ' + type;
+        }
+
+        function clearAlert() {
+          alertBox.style.display = 'none';
+          alertBox.textContent = '';
+        }
+
+        form.addEventListener('submit', async function (e) {
+          e.preventDefault();
+          clearAlert();
+
+          const ownerEmail = document.getElementById('ownerEmail').value.trim();
+          const subject = document.getElementById('subject').value.trim();
+          const title = document.getElementById('title').value.trim();
+          const message = document.getElementById('message').value.trim();
+          const ctaLabel = document.getElementById('ctaLabel').value.trim();
+          const ctaUrl = document.getElementById('ctaUrl').value.trim();
+
+          if (!ownerEmail || !subject || !title || !message) {
+            setAlert('alert-error', 'Owner email, subject, title and message are required.');
+            return;
+          }
+
+          sendBtn.disabled = true;
+          sendBtn.textContent = 'Sending...';
+          statusOwner.textContent = ownerEmail;
+
+          try {
+            const base = window.location.origin;
+            const url = base + '/.netlify/functions/global-broadcast';
+
+            const resp = await fetch(url, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                subject,
+                title,
+                message,
+                ctaLabel: ctaLabel || 'Open HiveFlow',
+                ctaUrl: ctaUrl || '',
+                email: ownerEmail,
+                userId: 'owner-console',
+              }),
+            });
+
+            const text = await resp.text();
+
+            if (!resp.ok) {
+              console.log('GLOBAL BROADCAST ERROR:', resp.status, text);
+              setAlert('alert-error', 'Failed to send global announcement. Check console for details.');
+            } else {
+              let info = null;
+              try {
+                info = JSON.parse(text);
+              } catch {}
+              const count = info && typeof info.recipientsCount === 'number' ? info.recipientsCount : 'all';
+              setAlert('alert-success', 'Global announcement sent successfully to ' + count + ' recipients.');
+              form.reset();
+            }
+          } catch (err) {
+            console.error('GLOBAL BROADCAST NETWORK ERROR:', err);
+            setAlert('alert-error', 'Network error while sending global announcement.');
+          } finally {
+            sendBtn.disabled = false;
+            sendBtn.textContent = 'Send to everyone';
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>
